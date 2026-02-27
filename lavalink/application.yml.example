@@ -20,14 +20,23 @@ logging:
   level:
     root: INFO
 
+  plugins:
+    - dependency: "com.github.topi314.lavasrc:lavasrc-plugin:4.8.1"
+      repository: "https://maven.lavalink.dev/releases"
+      snapshot: false
+
 plugins:
-  # Example for Lavasrc plugin (Spotify/YouTube Music resolvers).
-  # You must download the plugin JAR and place it next to Lavalink.jar,
-  # then configure credentials below.
+  # LavaSrc plugin config (Spotify/YouTube Music resolvers).
+  # Lavalink will auto-download the plugin above on startup.
   lavasrc:
+    sources:
+      spotify: true
+      youtube: true
+      ytdlp: true
     spotify:
-      clientId: "your_spotify_client_id"
-      clientSecret: "your_spotify_client_secret"
+      clientId: "d07cf9fe03334a088a92f2ddc2b903ff"
+      clientSecret: "f6bc028d512f475d9d3d1dd462f5fa40"
       countryCode: "US"
-    youtubeMusic:
-      enabled: true
+    providers:
+      - "ytsearch:\"%ISRC%\""
+      - "ytsearch:%QUERY%"

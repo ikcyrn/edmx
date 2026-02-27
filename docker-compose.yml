@@ -1,0 +1,24 @@
+services:
+  lavalink:
+    build:
+      context: .
+      dockerfile: lavalink/docker/Dockerfile
+      args:
+        LAVALINK_VERSION: 4.1.1
+    container_name: lavalink
+    volumes:
+      - ./lavalink/application.yml:/opt/application.yml:ro
+    ports:
+      - "2333:2333"
+    restart: unless-stopped
+
+  bot:
+    build: .
+    container_name: edmx-bot
+    depends_on:
+      - lavalink
+    env_file:
+      - .env
+    environment:
+      - LAVALINK_HOST=lavalink
+    restart: unless-stopped
