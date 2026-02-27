@@ -19,11 +19,43 @@ const nodes = [
   }
 ];
 
-const shoukaku = new Shoukaku(new Connectors.DiscordJS(client), nodes, {
-  moveOnDisconnect: false
-});
+let shoukaku = null;
 
 const queues = new Map();
+let lastLavalinkHint = 0;
+
+function getLavalinkHttpUrl() {
+  const host = process.env.LAVALINK_HOST || "localhost";
+  const port = process.env.LAVALINK_PORT || "2333";
+  return `http://${host}:${port}/v4/info`;
+}
+
+async function waitForLavalink() {
+  const password = process.env.LAVALINK_PASSWORD || "youshallnotpass";
+  let delay = 1000;
+  while (true) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 3000);
+    try {
+      const res = await fetch(getLavalinkHttpUrl(), {
+        method: "GET",
+        headers: { Authorization: password },
+        signal: controller.signal
+      });
+      clearTimeout(timeout);
+      if (res.ok) {
+        console.log("Lavalink is ready.");
+        return;
+      }
+      console.log(`Waiting for Lavalink (status ${res.status})...`);
+    } catch (err) {
+      clearTimeout(timeout);
+      console.log("Waiting for Lavalink to become available...");
+    }
+    await new Promise((r) => setTimeout(r, delay));
+    delay = Math.min(delay * 2, 10000);
+  }
+}
 
 function getState(guildId) {
   if (!queues.has(guildId)) {
@@ -59,6 +91,9 @@ function trackTitle(track) {
 }
 
 async function ensurePlayer(interaction, state) {
+  if (!shoukaku) {
+    throw new Error("Lavalink is starting. Try again in a moment.");
+  }
   const member = await interaction.guild.members.fetch(interaction.user.id);
   const voiceChannel = member.voice.channel;
   if (!voiceChannel) {
@@ -104,6 +139,9 @@ async function ensurePlayer(interaction, state) {
 }
 
 async function resolveTracks(query) {
+  if (!shoukaku) {
+    throw new Error("Lavalink is starting. Try again in a moment.");
+  }
   const node = shoukaku.nodes.get("main");
   if (!node) throw new Error("Lavalink node is not ready yet.");
 
@@ -147,16 +185,29 @@ async function playNext(guildId) {
   await state.player.playTrack({ track: next.encoded });
 }
 
-client.once(Events.ClientReady, () => {
+client.once(Events.ClientReady, async () => {
   console.log(`Logged in as ${client.user.tag}`);
-});
+  await waitForLavalink();
+  shoukaku = new Shoukaku(new Connectors.DiscordJS(client), nodes, {
+    moveOnDisconnect: false
+  });
 
-shoukaku.on("ready", (name) => {
-  console.log(`Lavalink node ${name} connected.`);
-});
+  shoukaku.on("ready", (name) => {
+    console.log(`Lavalink node ${name} connected.`);
+  });
 
-shoukaku.on("error", (name, error) => {
-  console.error(`Lavalink node ${name} error`, error);
+  shoukaku.on("error", (name, error) => {
+    const now = Date.now();
+    const code = error?.code;
+    const status = error?.status;
+    if ((code === "ECONNREFUSED" || status === 401) && now - lastLavalinkHint > 5000) {
+      lastLavalinkHint = now;
+      console.log(
+        "Lavalink not ready or auth mismatch. Waiting for it to become available..."
+      );
+    }
+    console.error(`Lavalink node ${name} error`, error);
+  });
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
