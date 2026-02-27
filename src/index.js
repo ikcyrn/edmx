@@ -19,15 +19,35 @@ const nodes = [
   }
 ];
 
-let shoukaku = null;
+const shoukaku = new Shoukaku(new Connectors.DiscordJS(client), nodes, {
+  moveOnDisconnect: false
+});
 
 const queues = new Map();
 let lastLavalinkHint = 0;
+let lavalinkReady = false;
 
 function getLavalinkHttpUrl() {
   const host = process.env.LAVALINK_HOST || "localhost";
   const port = process.env.LAVALINK_PORT || "2333";
   return `http://${host}:${port}/v4/info`;
+}
+
+function waitForNodeReady() {
+  return new Promise((resolve) => {
+    const existing = shoukaku.nodes.get("main");
+    if (existing && existing.state === 1) {
+      resolve();
+      return;
+    }
+    const onReady = (name) => {
+      if (name === "main") {
+        shoukaku.off("ready", onReady);
+        resolve();
+      }
+    };
+    shoukaku.on("ready", onReady);
+  });
 }
 
 async function waitForLavalink() {
@@ -45,6 +65,7 @@ async function waitForLavalink() {
       clearTimeout(timeout);
       if (res.ok) {
         console.log("Lavalink is ready.");
+        lavalinkReady = true;
         return;
       }
       console.log(`Waiting for Lavalink (status ${res.status})...`);
@@ -72,6 +93,17 @@ function getState(guildId) {
   return queues.get(guildId);
 }
 
+function resetState(state) {
+  if (state.idleTimer) {
+    clearTimeout(state.idleTimer);
+    state.idleTimer = null;
+  }
+  state.player = null;
+  state.queue = [];
+  state.now = null;
+  state.playing = false;
+}
+
 function formatDuration(ms) {
   if (!ms || ms === 0) return "LIVE";
   const totalSeconds = Math.floor(ms / 1000);
@@ -91,13 +123,26 @@ function trackTitle(track) {
 }
 
 async function ensurePlayer(interaction, state) {
-  if (!shoukaku) {
+  if (!lavalinkReady) {
     throw new Error("Lavalink is starting. Try again in a moment.");
   }
+  await waitForNodeReady();
   const member = await interaction.guild.members.fetch(interaction.user.id);
   const voiceChannel = member.voice.channel;
   if (!voiceChannel) {
     throw new Error("Join a voice channel first.");
+  }
+
+  if (state.player) {
+    const currentChannelId = state.player.connection?.channelId;
+    if (!currentChannelId || currentChannelId !== voiceChannel.id) {
+      try {
+        await state.player.destroy();
+      } catch (err) {
+        console.error("Error destroying stale player", err);
+      }
+      state.player = null;
+    }
   }
 
   if (!state.player) {
@@ -128,6 +173,10 @@ async function ensurePlayer(interaction, state) {
       console.error("Player error", err);
       state.playing = false;
     });
+
+    state.player.on("closed", () => {
+      resetState(state);
+    });
   }
 
   if (state.idleTimer) {
@@ -139,7 +188,7 @@ async function ensurePlayer(interaction, state) {
 }
 
 async function resolveTracks(query) {
-  if (!shoukaku) {
+  if (!lavalinkReady) {
     throw new Error("Lavalink is starting. Try again in a moment.");
   }
   const node = shoukaku.nodes.get("main");
@@ -147,6 +196,25 @@ async function resolveTracks(query) {
 
   const identifier = /^https?:\/\//.test(query) ? query : `ytsearch:${query}`;
   return node.rest.resolve(identifier);
+}
+
+function normalizeLoadResult(res) {
+  const loadType = res?.loadType || res?.loadtype || "";
+  if (Array.isArray(res?.tracks)) {
+    return { loadType, tracks: res.tracks, playlistInfo: res.playlistInfo };
+  }
+  if (res?.data) {
+    if (Array.isArray(res.data)) {
+      return { loadType, tracks: res.data, playlistInfo: res.playlistInfo };
+    }
+    if (Array.isArray(res.data?.tracks)) {
+      return { loadType, tracks: res.data.tracks, playlistInfo: res.data.info };
+    }
+    if (res.data?.encoded) {
+      return { loadType, tracks: [res.data], playlistInfo: null };
+    }
+  }
+  return { loadType, tracks: [], playlistInfo: null };
 }
 
 async function playNext(guildId) {
@@ -182,32 +250,29 @@ async function playNext(guildId) {
   if (state.player.setVolume) {
     await state.player.setVolume(state.volume);
   }
-  await state.player.playTrack({ track: next.encoded });
+  await state.player.playTrack({ track: { encoded: next.encoded } });
 }
 
 client.once(Events.ClientReady, async () => {
   console.log(`Logged in as ${client.user.tag}`);
   await waitForLavalink();
-  shoukaku = new Shoukaku(new Connectors.DiscordJS(client), nodes, {
-    moveOnDisconnect: false
-  });
+});
 
-  shoukaku.on("ready", (name) => {
-    console.log(`Lavalink node ${name} connected.`);
-  });
+shoukaku.on("ready", (name) => {
+  console.log(`Lavalink node ${name} connected.`);
+});
 
-  shoukaku.on("error", (name, error) => {
-    const now = Date.now();
-    const code = error?.code;
-    const status = error?.status;
-    if ((code === "ECONNREFUSED" || status === 401) && now - lastLavalinkHint > 5000) {
-      lastLavalinkHint = now;
-      console.log(
-        "Lavalink not ready or auth mismatch. Waiting for it to become available..."
-      );
-    }
-    console.error(`Lavalink node ${name} error`, error);
-  });
+shoukaku.on("error", (name, error) => {
+  const now = Date.now();
+  const code = error?.code;
+  const status = error?.status;
+  if ((code === "ECONNREFUSED" || status === 401) && now - lastLavalinkHint > 5000) {
+    lastLavalinkHint = now;
+    console.log(
+      "Lavalink not ready or auth mismatch. Waiting for it to become available..."
+    );
+  }
+  console.error(`Lavalink node ${name} error`, error);
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
@@ -223,19 +288,20 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
         const query = interaction.options.getString("query", true);
         const res = await resolveTracks(query);
+        const result = normalizeLoadResult(res);
 
-        if (!res || !res.tracks || res.tracks.length === 0) {
+        if (!result || result.tracks.length === 0) {
           await interaction.editReply("No matches found.");
           return;
         }
 
-        if (res.loadType === "PLAYLIST_LOADED") {
-          state.queue.push(...res.tracks);
+        if (result.loadType === "PLAYLIST_LOADED" || result.loadType === "playlist_loaded") {
+          state.queue.push(...result.tracks);
           await interaction.editReply(
-            `Queued playlist: ${res.playlistInfo?.name || "Unknown"} (${res.tracks.length} tracks)`
+            `Queued playlist: ${result.playlistInfo?.name || "Unknown"} (${result.tracks.length} tracks)`
           );
         } else {
-          const track = res.tracks[0];
+          const track = result.tracks[0];
           state.queue.push(track);
           await interaction.editReply(`Queued: ${trackTitle(track)}`);
         }
@@ -351,6 +417,15 @@ client.on(Events.InteractionCreate, async (interaction) => {
     } else {
       await interaction.reply({ content: message, ephemeral: true });
     }
+  }
+});
+
+client.on(Events.VoiceStateUpdate, (oldState, newState) => {
+  const me = newState.guild.members.me;
+  if (!me || newState.id !== me.id) return;
+  if (oldState.channelId && !newState.channelId) {
+    const state = getState(newState.guild.id);
+    resetState(state);
   }
 });
 
