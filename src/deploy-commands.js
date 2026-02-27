@@ -1,0 +1,67 @@
+require("dotenv").config();
+const { REST, Routes, SlashCommandBuilder } = require("discord.js");
+
+const commands = [
+  new SlashCommandBuilder()
+    .setName("play")
+    .setDescription("Play a track, playlist, or album from a link or search query")
+    .addStringOption((opt) =>
+      opt
+        .setName("query")
+        .setDescription("Spotify/YouTube Music link or search query")
+        .setRequired(true)
+    ),
+  new SlashCommandBuilder().setName("skip").setDescription("Skip the current track"),
+  new SlashCommandBuilder().setName("pause").setDescription("Pause playback"),
+  new SlashCommandBuilder().setName("resume").setDescription("Resume playback"),
+  new SlashCommandBuilder().setName("nowplaying").setDescription("Show the current track"),
+  new SlashCommandBuilder().setName("queue").setDescription("Show the queue"),
+  new SlashCommandBuilder().setName("leave").setDescription("Disconnect the bot"),
+  new SlashCommandBuilder()
+    .setName("loop")
+    .setDescription("Set loop mode")
+    .addStringOption((opt) =>
+      opt
+        .setName("mode")
+        .setDescription("off | track | queue")
+        .setRequired(true)
+        .addChoices(
+          { name: "off", value: "off" },
+          { name: "track", value: "track" },
+          { name: "queue", value: "queue" }
+        )
+    )
+  ,
+  new SlashCommandBuilder()
+    .setName("volume")
+    .setDescription("Set playback volume (0-200)")
+    .addIntegerOption((opt) =>
+      opt
+        .setName("level")
+        .setDescription("Volume level 0-200")
+        .setRequired(true)
+        .setMinValue(0)
+        .setMaxValue(200)
+    )
+].map((c) => c.toJSON());
+
+const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
+
+(async () => {
+  try {
+    if (!process.env.CLIENT_ID) throw new Error("Missing CLIENT_ID");
+    if (process.env.GUILD_ID) {
+      await rest.put(Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID), {
+        body: commands
+      });
+      console.log("Registered guild commands.");
+      return;
+    }
+
+    await rest.put(Routes.applicationCommands(process.env.CLIENT_ID), { body: commands });
+    console.log("Registered global commands.");
+  } catch (err) {
+    console.error(err);
+    process.exit(1);
+  }
+})();
