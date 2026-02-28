@@ -419,6 +419,21 @@ client.on(Events.InteractionCreate, async (interaction) => {
         await interaction.reply({ embeds: [embed] });
         return;
       }
+      case "shuffle": {
+        if (state.queue.length < 2) {
+          await interaction.reply({
+            content: "Not enough tracks in the queue to shuffle.",
+            ephemeral: true
+          });
+          return;
+        }
+        for (let i = state.queue.length - 1; i > 0; i -= 1) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [state.queue[i], state.queue[j]] = [state.queue[j], state.queue[i]];
+        }
+        await interaction.reply("Queue shuffled.");
+        return;
+      }
       case "leave": {
         if (state.player) {
           await state.player.destroy();
