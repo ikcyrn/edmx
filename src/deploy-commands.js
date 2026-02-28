@@ -28,17 +28,6 @@ const commands = [
   new SlashCommandBuilder().setName("shuffle").setDescription("Shuffle the queue"),
   new SlashCommandBuilder().setName("clear").setDescription("Clear the queue"),
   new SlashCommandBuilder().setName("leave").setDescription("Disconnect the bot"),
-  new SlashCommandBuilder()
-    .setName("volume")
-    .setDescription("Set playback volume (0-200)")
-    .addIntegerOption((opt) =>
-      opt
-        .setName("level")
-        .setDescription("Volume level 0-200")
-        .setRequired(true)
-        .setMinValue(0)
-        .setMaxValue(200)
-    )
 ].map((c) => c.toJSON());
 
 const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);

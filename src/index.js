@@ -839,21 +839,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
         await updateQueueMessage(interaction.guild.id);
         return;
       }
-      case "volume": {
-        const level = interaction.options.getInteger("level", true);
-        state.volume = level;
-        if (state.player) {
-          await state.player.setVolume(level);
-        }
-        await interaction.reply(
-          buildEmbedMessage({
-            title: "Volume",
-            description: `Volume set to ${level}.`,
-            icon: "queue"
-          })
-        );
-        return;
-      }
       default:
         await replyWarn(interaction, "Unknown command.");
     }
