@@ -102,6 +102,20 @@ function buildQueuePayload(state, page, userId, iconUrl) {
   const total = state.queue.length;
   const totalPages = Math.max(1, Math.ceil(total / QUEUE_PAGE_SIZE));
   const clampedPage = Math.min(Math.max(page, 1), totalPages);
+  if (total === 0) {
+    const embed = new EmbedBuilder()
+      .setColor(ICON_COLORS.queue)
+      .setAuthor({
+        name: "Queue",
+        iconURL: iconUrl || `attachment://${ICONS.queue}`
+      })
+      .setDescription("Queue is empty.");
+    return {
+      embeds: [embed],
+      files: iconUrl ? [] : [{ attachment: iconPath("queue"), name: ICONS.queue }],
+      components: []
+    };
+  }
   const start = (clampedPage - 1) * QUEUE_PAGE_SIZE;
   const slice = state.queue.slice(start, start + QUEUE_PAGE_SIZE);
   const wrapText = (text, width) => {
@@ -252,7 +266,11 @@ function getState(guildId) {
       loop: "off",
       playing: false,
       volume: 100,
-      idleTimer: null
+      idleTimer: null,
+      queueMessageId: null,
+      queueChannelId: null,
+      queueIconUrl: null,
+      queuePage: 1
     });
   }
   return queues.get(guildId);
@@ -267,6 +285,20 @@ function resetState(state) {
   state.queue = [];
   state.now = null;
   state.playing = false;
+}
+
+async function updateQueueMessage(guildId) {
+  const state = getState(guildId);
+  if (!state.queueMessageId || !state.queueChannelId) return;
+  try {
+    const channel = await client.channels.fetch(state.queueChannelId);
+    if (!channel || !channel.isTextBased()) return;
+    const message = await channel.messages.fetch(state.queueMessageId);
+    const payload = buildQueuePayload(state, state.queuePage || 1, null, state.queueIconUrl || null);
+    await message.edit(payload);
+  } catch (err) {
+    console.error("Failed to update queue message", err);
+  }
 }
 
 function formatDuration(ms) {
@@ -446,6 +478,7 @@ async function playNext(guildId) {
   const next = state.queue.shift();
   if (!next) {
     state.now = null;
+    await updateQueueMessage(guildId);
     if (state.player && !state.idleTimer) {
       state.idleTimer = setTimeout(async () => {
         try {
@@ -473,6 +506,7 @@ async function playNext(guildId) {
     await state.player.setVolume(state.volume);
   }
   await state.player.playTrack({ track: { encoded: next.encoded } });
+  await updateQueueMessage(guildId);
 }
 
 client.once(Events.ClientReady, async () => {
@@ -511,6 +545,10 @@ client.on(Events.InteractionCreate, async (interaction) => {
     if (action === "last") nextPage = totalPages;
     const attachment = interaction.message.attachments.find((a) => a.name === ICONS.queue);
     const iconUrl = attachment ? attachment.url : null;
+    state.queuePage = nextPage;
+    state.queueIconUrl = iconUrl || state.queueIconUrl;
+    state.queueMessageId = interaction.message.id;
+    state.queueChannelId = interaction.channelId;
     await interaction.update(buildQueuePayload(state, nextPage, interaction.user.id, iconUrl));
     return;
   }
@@ -697,7 +735,14 @@ client.on(Events.InteractionCreate, async (interaction) => {
           await replyWarn(interaction, "Queue is empty.");
           return;
         }
-        await interaction.reply(buildQueuePayload(state, 1, interaction.user.id));
+        const payload = buildQueuePayload(state, 1, interaction.user.id);
+        await interaction.reply(payload);
+        const message = await interaction.fetchReply();
+        const attachment = message.attachments.find((a) => a.name === ICONS.queue);
+        state.queueMessageId = message.id;
+        state.queueChannelId = interaction.channelId;
+        state.queuePage = 1;
+        state.queueIconUrl = attachment ? attachment.url : null;
         return;
       }
       case "shuffle": {
@@ -753,6 +798,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
             icon: "leave"
           })
         );
+        await updateQueueMessage(interaction.guild.id);
         return;
       }
       case "volume": {
