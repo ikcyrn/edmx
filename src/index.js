@@ -302,7 +302,13 @@ client.on(Events.InteractionCreate, async (interaction) => {
           return;
         }
 
-        if (result.loadType === "PLAYLIST_LOADED" || result.loadType === "playlist_loaded") {
+        const isCollection =
+          /\/(playlist|album)\//.test(query) ||
+          result.loadType === "PLAYLIST_LOADED" ||
+          result.loadType === "playlist_loaded" ||
+          Boolean(result.playlistInfo?.name);
+
+        if (isCollection && result.tracks.length > 1) {
           state.queue.push(...result.tracks);
           await interaction.editReply(
             `Queued playlist: ${result.playlistInfo?.name || "Unknown"} (${result.tracks.length} tracks)`
@@ -394,6 +400,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
           state.queue = [];
           state.now = null;
           state.playing = false;
+        }
+        try {
+          shoukaku.leaveVoiceChannel(interaction.guild.id);
+        } catch (err) {
+          console.error("Error leaving voice channel", err);
         }
         await interaction.reply("Disconnected.");
         return;
