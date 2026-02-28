@@ -11,7 +11,15 @@ const commands = [
         .setDescription("Spotify/YouTube Music link or search query")
         .setRequired(true)
     ),
-  new SlashCommandBuilder().setName("skip").setDescription("Skip the current track"),
+  new SlashCommandBuilder()
+    .setName("skip")
+    .setDescription("Skip the current track or jump to a position in the queue")
+    .addIntegerOption((opt) =>
+      opt
+        .setName("position")
+        .setDescription("Queue position to skip to (0 = current, 1 = next track)")
+        .setRequired(false)
+    ),
   new SlashCommandBuilder().setName("pause").setDescription("Pause playback"),
   new SlashCommandBuilder().setName("resume").setDescription("Resume playback"),
   new SlashCommandBuilder().setName("nowplaying").setDescription("Show the current track"),

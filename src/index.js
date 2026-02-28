@@ -327,6 +327,32 @@ client.on(Events.InteractionCreate, async (interaction) => {
           await interaction.reply({ content: "Nothing is playing.", ephemeral: true });
           return;
         }
+        const position = interaction.options.getInteger("position");
+        if (position !== null && position !== undefined) {
+          if (position < 0) {
+            await interaction.reply({
+              content: "Position cannot be negative. Use 0 to skip the current track.",
+              ephemeral: true
+            });
+            return;
+          }
+          if (position === 0) {
+            await state.player.stopTrack();
+            await interaction.reply("Skipped current track.");
+            return;
+          }
+          if (position < 1 || position > state.queue.length) {
+            await interaction.reply({
+              content: `Position out of range. Queue length is ${state.queue.length}.`,
+              ephemeral: true
+            });
+            return;
+          }
+          state.queue.splice(0, position - 1);
+          await state.player.stopTrack();
+          await interaction.reply(`Skipped to position ${position}.`);
+          return;
+        }
         await state.player.stopTrack();
         await interaction.reply("Skipped.");
         return;
