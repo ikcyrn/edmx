@@ -117,10 +117,10 @@ function buildQueuePayload(state, page, userId, iconUrl) {
       .setDescription("Queue is empty.");
     return {
       embeds: [embed],
-    files: iconUrl ? [] : (iconPath("queue") ? [{ attachment: iconPath("queue"), name: ICONS.queue }] : []),
-    components: []
-  };
-}
+      files: iconUrl ? [] : (iconPath("queue") ? [{ attachment: iconPath("queue"), name: ICONS.queue }] : []),
+      components: []
+    };
+  }
   const start = (clampedPage - 1) * QUEUE_PAGE_SIZE;
   const slice = state.queue.slice(start, start + QUEUE_PAGE_SIZE);
   const wrapText = (text, width) => {
@@ -500,6 +500,31 @@ async function replyWarn(interaction, message) {
   await interaction.reply({ ...payload, ephemeral: true });
 }
 
+async function requireSameVoiceChannel(interaction) {
+  const member = await interaction.guild.members.fetch(interaction.user.id);
+  const userChannel = member.voice.channel;
+  const me = interaction.guild.members.me || (await interaction.guild.members.fetchMe());
+  const botChannel = me.voice.channel;
+
+  if (botChannel) {
+    if (!userChannel) {
+      await replyWarn(interaction, "Join voice channel to use commands.");
+      return false;
+    }
+    if (userChannel.id !== botChannel.id) {
+      await replyWarn(interaction, `Join <#${botChannel.id}> to control playback.`);
+      return false;
+    }
+    return true;
+  }
+
+  if (!userChannel) {
+    await replyWarn(interaction, "Join a voice channel to use music commands.");
+    return false;
+  }
+  return true;
+}
+
 async function playNext(guildId) {
   const state = queues.get(guildId);
   if (!state || !state.player || state.playing) return;
@@ -564,6 +589,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
   if (interaction.isButton()) {
     const [type, action, pageStr, userId] = interaction.customId.split(":");
     if (type !== "queue") return;
+    const allowed = await requireSameVoiceChannel(interaction);
+    if (!allowed) return;
     const state = getState(interaction.guild.id);
     const page = Number.parseInt(pageStr, 10) || 1;
     const totalPages = Math.max(1, Math.ceil(state.queue.length / QUEUE_PAGE_SIZE));
@@ -583,6 +610,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
   }
 
   if (!interaction.isChatInputCommand()) return;
+
+  const allowed = await requireSameVoiceChannel(interaction);
+  if (!allowed) return;
 
   const state = getState(interaction.guild.id);
 
