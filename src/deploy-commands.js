@@ -27,21 +27,6 @@ const commands = [
   new SlashCommandBuilder().setName("shuffle").setDescription("Shuffle the queue"),
   new SlashCommandBuilder().setName("leave").setDescription("Disconnect the bot"),
   new SlashCommandBuilder()
-    .setName("loop")
-    .setDescription("Set loop mode")
-    .addStringOption((opt) =>
-      opt
-        .setName("mode")
-        .setDescription("off | track | queue")
-        .setRequired(true)
-        .addChoices(
-          { name: "off", value: "off" },
-          { name: "track", value: "track" },
-          { name: "queue", value: "queue" }
-        )
-    )
-  ,
-  new SlashCommandBuilder()
     .setName("volume")
     .setDescription("Set playback volume (0-200)")
     .addIntegerOption((opt) =>

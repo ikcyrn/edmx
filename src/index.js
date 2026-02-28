@@ -450,12 +450,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
         await interaction.reply("Disconnected.");
         return;
       }
-      case "loop": {
-        const mode = interaction.options.getString("mode", true);
-        state.loop = mode;
-        await interaction.reply(`Loop mode set to ${mode}.`);
-        return;
-      }
       case "volume": {
         const level = interaction.options.getInteger("level", true);
         state.volume = level;
