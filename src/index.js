@@ -434,6 +434,15 @@ client.on(Events.InteractionCreate, async (interaction) => {
         await interaction.reply("Queue shuffled.");
         return;
       }
+      case "clear": {
+        if (state.queue.length === 0) {
+          await interaction.reply({ content: "Queue is already empty.", ephemeral: true });
+          return;
+        }
+        state.queue = [];
+        await interaction.reply("Queue cleared.");
+        return;
+      }
       case "leave": {
         if (state.player) {
           await state.player.destroy();

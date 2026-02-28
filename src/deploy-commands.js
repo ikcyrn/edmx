@@ -25,6 +25,7 @@ const commands = [
   new SlashCommandBuilder().setName("nowplaying").setDescription("Show the current track"),
   new SlashCommandBuilder().setName("queue").setDescription("Show the queue"),
   new SlashCommandBuilder().setName("shuffle").setDescription("Shuffle the queue"),
+  new SlashCommandBuilder().setName("clear").setDescription("Clear the queue"),
   new SlashCommandBuilder().setName("leave").setDescription("Disconnect the bot"),
   new SlashCommandBuilder()
     .setName("volume")
