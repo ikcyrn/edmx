@@ -9,6 +9,7 @@ const {
   ButtonStyle
 } = require("discord.js");
 const path = require("path");
+const fs = require("fs");
 const { Shoukaku, Connectors } = require("shoukaku");
 
 const client = new Client({
@@ -37,6 +38,7 @@ const ICONS = {
   pause: "pause.png",
   resume: "resume.png",
   skip: "skip.png",
+  stop: "stop.png",
   nowplaying: "nowplaying.png",
   queue: "queue.png",
   shuffle: "shuffle.png",
@@ -50,6 +52,7 @@ const ICON_COLORS = {
   pause: 0x6366f1,
   resume: 0x6366f1,
   skip: 0x6366f1,
+  stop: 0x6366f1,
   nowplaying: 0x6366f1,
   queue: 0x6366f1,
   shuffle: 0x6366f1,
@@ -61,7 +64,8 @@ const ICON_COLORS = {
 function iconPath(name) {
   const file = ICONS[name];
   if (!file) return null;
-  return path.join(__dirname, "..", "assets", file);
+  const full = path.join(__dirname, "..", "assets", file);
+  return fs.existsSync(full) ? full : null;
 }
 
 function buildEmbedMessage({ title, description, icon }) {
@@ -91,7 +95,8 @@ function buildEmbedMessage({ title, description, icon }) {
       embed.setDescription(description);
     }
   }
-  const files = icon && ICONS[icon] ? [{ attachment: iconPath(icon), name: ICONS[icon] }] : [];
+  const filePath = icon ? iconPath(icon) : null;
+  const files = filePath ? [{ attachment: filePath, name: ICONS[icon] }] : [];
   return { embeds: [embed], files };
 }
 
@@ -112,10 +117,10 @@ function buildQueuePayload(state, page, userId, iconUrl) {
       .setDescription("Queue is empty.");
     return {
       embeds: [embed],
-      files: iconUrl ? [] : [{ attachment: iconPath("queue"), name: ICONS.queue }],
-      components: []
-    };
-  }
+    files: iconUrl ? [] : (iconPath("queue") ? [{ attachment: iconPath("queue"), name: ICONS.queue }] : []),
+    components: []
+  };
+}
   const start = (clampedPage - 1) * QUEUE_PAGE_SIZE;
   const slice = state.queue.slice(start, start + QUEUE_PAGE_SIZE);
   const wrapText = (text, width) => {
@@ -197,7 +202,7 @@ function buildQueuePayload(state, page, userId, iconUrl) {
   );
   return {
     embeds: [embed],
-    files: iconUrl ? [] : [{ attachment: iconPath("queue"), name: ICONS.queue }],
+    files: iconUrl ? [] : (iconPath("queue") ? [{ attachment: iconPath("queue"), name: ICONS.queue }] : []),
     components: [row]
   };
 }
@@ -735,6 +740,24 @@ client.on(Events.InteractionCreate, async (interaction) => {
         );
         return;
       }
+      case "stop": {
+        if (!state.player || !state.now) {
+          await replyWarn(interaction, "Nothing is playing right now.");
+          return;
+        }
+        await state.player.stopTrack();
+        state.now = null;
+        state.playing = false;
+        await interaction.reply(
+          buildEmbedMessage({
+            title: "Stopped",
+            description: "Playback stopped.",
+            icon: "stop"
+          })
+        );
+        await updateQueueMessage(interaction.guild.id);
+        return;
+      }
       case "nowplaying": {
         if (!state.now) {
           await replyWarn(interaction, "Nothing is playing right now.");
@@ -808,7 +831,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
         await interaction.reply(
           buildEmbedMessage({
             title: "Disconnected",
-            description: "Left the voice channel.",
+            description: "Gracefully leaving...",
             icon: "leave"
           })
         );
