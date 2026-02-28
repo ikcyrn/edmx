@@ -3,7 +3,10 @@ const {
   Client,
   GatewayIntentBits,
   Events,
-  EmbedBuilder
+  EmbedBuilder,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle
 } = require("discord.js");
 const path = require("path");
 const { Shoukaku, Connectors } = require("shoukaku");
@@ -90,6 +93,99 @@ function buildEmbedMessage({ title, description, icon }) {
   }
   const files = icon && ICONS[icon] ? [{ attachment: iconPath(icon), name: ICONS[icon] }] : [];
   return { embeds: [embed], files };
+}
+
+const QUEUE_PAGE_SIZE = 10;
+const QUEUE_LINE_WIDTH = 36;
+
+function buildQueuePayload(state, page, userId, iconUrl) {
+  const total = state.queue.length;
+  const totalPages = Math.max(1, Math.ceil(total / QUEUE_PAGE_SIZE));
+  const clampedPage = Math.min(Math.max(page, 1), totalPages);
+  const start = (clampedPage - 1) * QUEUE_PAGE_SIZE;
+  const slice = state.queue.slice(start, start + QUEUE_PAGE_SIZE);
+  const wrapText = (text, width) => {
+    const out = [];
+    let current = text;
+    while (current.length > width) {
+      out.push(current.slice(0, width));
+      current = current.slice(width);
+    }
+    out.push(current);
+    return out;
+  };
+
+  const lines = [];
+  slice.forEach((t, i) => {
+    const dur = `(${formatDuration(t.info.length)})`;
+    const prefix = `${start + i + 1}. `;
+    const indent = " ".repeat(prefix.length);
+    const maxBody = Math.max(QUEUE_LINE_WIDTH - prefix.length, 10);
+    const title = t.info.title;
+    const titleLine = `${title} ${dur}`;
+
+    if (titleLine.length <= maxBody) {
+      lines.push(`${prefix}${titleLine}`);
+      return;
+    }
+
+    const wrappedTitle = wrapText(title, maxBody);
+    wrappedTitle.forEach((part, idx) => {
+      lines.push(`${idx === 0 ? prefix : indent}${part}`);
+    });
+    lines.push(`${indent}${dur}`);
+  });
+
+  while (lines.length < QUEUE_PAGE_SIZE) lines.push("");
+  const padded = lines.map((l) => l.padEnd(QUEUE_LINE_WIDTH, " "));
+  const embed = new EmbedBuilder()
+    .setColor(ICON_COLORS.queue)
+    .setAuthor({
+      name: `Queue — Page ${clampedPage}/${totalPages}`,
+      iconURL: iconUrl || `attachment://${ICONS.queue}`
+    })
+    .setDescription(`\`\`\`\n${padded.join("\n")}\n\`\`\``)
+    .addFields(
+      { name: "Total in Queue", value: String(total), inline: true },
+      { name: "Total Duration", value: formatDuration(sumQueueDuration(state.queue)), inline: true }
+    );
+  if (state.now) {
+    embed.addFields({
+      name: "Now Playing",
+      value: `[${state.now.info.title}](${state.now.info.uri})`
+    });
+  }
+  const prevDisabled = clampedPage <= 1;
+  const nextDisabled = clampedPage >= totalPages;
+  const firstDisabled = clampedPage <= 1;
+  const lastDisabled = clampedPage >= totalPages;
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`queue:first:${clampedPage}:${userId}`)
+      .setLabel("Top")
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(firstDisabled),
+    new ButtonBuilder()
+      .setCustomId(`queue:prev:${clampedPage}:${userId}`)
+      .setLabel("Previous")
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(prevDisabled),
+    new ButtonBuilder()
+      .setCustomId(`queue:next:${clampedPage}:${userId}`)
+      .setLabel("Next")
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(nextDisabled),
+    new ButtonBuilder()
+      .setCustomId(`queue:last:${clampedPage}:${userId}`)
+      .setLabel("End")
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(lastDisabled)
+  );
+  return {
+    embeds: [embed],
+    files: iconUrl ? [] : [{ attachment: iconPath("queue"), name: ICONS.queue }],
+    components: [row]
+  };
 }
 
 function getLavalinkHttpUrl() {
@@ -183,6 +279,10 @@ function formatDuration(ms) {
   return hours > 0
     ? `${hours}:${pad(minutes)}:${pad(seconds)}`
     : `${minutes}:${pad(seconds)}`;
+}
+
+function sumQueueDuration(tracks) {
+  return tracks.reduce((acc, t) => acc + (t?.info?.length || 0), 0);
 }
 
 function trackTitle(track) {
@@ -398,6 +498,23 @@ shoukaku.on("error", (name, error) => {
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
+  if (interaction.isButton()) {
+    const [type, action, pageStr, userId] = interaction.customId.split(":");
+    if (type !== "queue") return;
+    const state = getState(interaction.guild.id);
+    const page = Number.parseInt(pageStr, 10) || 1;
+    const totalPages = Math.max(1, Math.ceil(state.queue.length / QUEUE_PAGE_SIZE));
+    let nextPage = page;
+    if (action === "next") nextPage = page + 1;
+    if (action === "prev") nextPage = page - 1;
+    if (action === "first") nextPage = 1;
+    if (action === "last") nextPage = totalPages;
+    const attachment = interaction.message.attachments.find((a) => a.name === ICONS.queue);
+    const iconUrl = attachment ? attachment.url : null;
+    await interaction.update(buildQueuePayload(state, nextPage, interaction.user.id, iconUrl));
+    return;
+  }
+
   if (!interaction.isChatInputCommand()) return;
 
   const state = getState(interaction.guild.id);
@@ -580,34 +697,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
           await replyWarn(interaction, "Queue is empty.");
           return;
         }
-
-        const lines = state.queue.slice(0, 10).map((t, i) => {
-          const dur = formatDuration(t.info.length);
-          return `${i + 1}. ${t.info.title} (${dur})`;
-        });
-        const more = state.queue.length > 10 ? `\n...and ${state.queue.length - 10} more` : "";
-        const embed = new EmbedBuilder()
-          .setColor(ICON_COLORS.queue)
-          .setAuthor({
-            name: "Queue",
-            iconURL: `attachment://${ICONS.queue}`
-          })
-          .setDescription(lines.join("\n") + more)
-          .addFields(
-            { name: "Total in Queue", value: String(state.queue.length), inline: true },
-            { name: "Loop", value: state.loop, inline: true },
-            { name: "Volume", value: String(state.volume), inline: true }
-          );
-        if (state.now) {
-          embed.addFields({
-            name: "Now Playing",
-            value: `[${state.now.info.title}](${state.now.info.uri})`
-          });
-        }
-        await interaction.reply({
-          embeds: [embed],
-          files: [{ attachment: iconPath("queue"), name: ICONS.queue }]
-        });
+        await interaction.reply(buildQueuePayload(state, 1, interaction.user.id));
         return;
       }
       case "shuffle": {
