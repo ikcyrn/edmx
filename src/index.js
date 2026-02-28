@@ -26,6 +26,7 @@ const shoukaku = new Shoukaku(new Connectors.DiscordJS(client), nodes, {
 const queues = new Map();
 let lastLavalinkHint = 0;
 let lavalinkReady = false;
+let lavalinkAuthFailed = false;
 
 function getLavalinkHttpUrl() {
   const host = process.env.LAVALINK_HOST || "localhost";
@@ -66,7 +67,11 @@ async function waitForLavalink() {
       if (res.ok) {
         console.log("Lavalink is ready.");
         lavalinkReady = true;
+        lavalinkAuthFailed = false;
         return;
+      }
+      if (res.status === 401) {
+        lavalinkAuthFailed = true;
       }
       console.log(`Waiting for Lavalink (status ${res.status})...`);
     } catch (err) {
@@ -124,9 +129,13 @@ function trackTitle(track) {
 
 async function ensurePlayer(interaction, state) {
   if (!lavalinkReady) {
+    if (lavalinkAuthFailed) {
+      throw new Error("Lavalink auth failed. Please check `LAVALINK_PASSWORD`.");
+    }
     throw new Error("Lavalink is starting. Try again in a moment.");
   }
   await waitForNodeReady();
+  const me = interaction.guild.members.me || (await interaction.guild.members.fetchMe());
   if (shoukaku.connections.has(interaction.guild.id)) {
     try {
       shoukaku.leaveVoiceChannel(interaction.guild.id);
@@ -139,9 +148,22 @@ async function ensurePlayer(interaction, state) {
   if (!voiceChannel) {
     throw new Error("Join a voice channel first.");
   }
+  const perms = voiceChannel.permissionsFor(me);
+  if (!perms?.has("ViewChannel")) {
+    throw new Error("I can't see that voice channel. Please update permissions.");
+  }
+  if (!perms?.has("Connect")) {
+    throw new Error("I need permission to connect to that voice channel.");
+  }
+  if (!perms?.has("Speak")) {
+    throw new Error("I need permission to speak in that voice channel.");
+  }
 
   if (state.player) {
     const currentChannelId = state.player.connection?.channelId;
+    if (currentChannelId && currentChannelId !== voiceChannel.id) {
+      throw new Error(`I'm already playing in <#${currentChannelId}>. Join me there or use /leave first.`);
+    }
     if (!currentChannelId || currentChannelId !== voiceChannel.id) {
       try {
         await state.player.destroy();
@@ -196,6 +218,9 @@ async function ensurePlayer(interaction, state) {
 
 async function resolveTracks(query) {
   if (!lavalinkReady) {
+    if (lavalinkAuthFailed) {
+      throw new Error("Lavalink auth failed. Please check `LAVALINK_PASSWORD`.");
+    }
     throw new Error("Lavalink is starting. Try again in a moment.");
   }
   const node = shoukaku.nodes.get("main");
@@ -222,6 +247,22 @@ function normalizeLoadResult(res) {
     }
   }
   return { loadType, tracks: [], playlistInfo: null };
+}
+
+async function replyError(interaction, message) {
+  if (interaction.deferred) {
+    await interaction.editReply(message);
+    return;
+  }
+  await interaction.reply({ content: message, ephemeral: true });
+}
+
+async function replyWarn(interaction, message) {
+  if (interaction.deferred) {
+    await interaction.editReply(message);
+    return;
+  }
+  await interaction.reply({ content: message, ephemeral: true });
 }
 
 async function playNext(guildId) {
@@ -296,6 +337,18 @@ client.on(Events.InteractionCreate, async (interaction) => {
         const query = interaction.options.getString("query", true);
         const res = await resolveTracks(query);
         const result = normalizeLoadResult(res);
+        const loadType = (result.loadType || "").toUpperCase();
+
+        if (loadType === "LOAD_FAILED") {
+          await interaction.editReply(
+            "I couldn't load that track. The provider might be blocked or unavailable."
+          );
+          return;
+        }
+        if (loadType === "NO_MATCHES") {
+          await interaction.editReply("No matches found. Try another link or search.");
+          return;
+        }
 
         if (!result || result.tracks.length === 0) {
           await interaction.editReply("No matches found.");
@@ -324,16 +377,13 @@ client.on(Events.InteractionCreate, async (interaction) => {
       }
       case "skip": {
         if (!state.player || !state.now) {
-          await interaction.reply({ content: "Nothing is playing.", ephemeral: true });
+          await replyWarn(interaction, "Nothing is playing right now.");
           return;
         }
         const position = interaction.options.getInteger("position");
         if (position !== null && position !== undefined) {
           if (position < 0) {
-            await interaction.reply({
-              content: "Position cannot be negative. Use 0 to skip the current track.",
-              ephemeral: true
-            });
+            await replyWarn(interaction, "Position cannot be negative. Use 0 to skip the current track.");
             return;
           }
           if (position === 0) {
@@ -342,10 +392,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
             return;
           }
           if (position < 1 || position > state.queue.length) {
-            await interaction.reply({
-              content: `Position out of range. Queue length is ${state.queue.length}.`,
-              ephemeral: true
-            });
+            await replyWarn(interaction, `Position out of range. Queue length is ${state.queue.length}.`);
             return;
           }
           state.queue.splice(0, position - 1);
@@ -359,7 +406,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       }
       case "pause": {
         if (!state.player) {
-          await interaction.reply({ content: "Nothing is playing.", ephemeral: true });
+          await replyWarn(interaction, "Nothing is playing right now.");
           return;
         }
         await state.player.setPaused(true);
@@ -368,7 +415,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       }
       case "resume": {
         if (!state.player) {
-          await interaction.reply({ content: "Nothing is playing.", ephemeral: true });
+          await replyWarn(interaction, "Nothing is playing right now.");
           return;
         }
         await state.player.setPaused(false);
@@ -377,7 +424,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       }
       case "nowplaying": {
         if (!state.now) {
-          await interaction.reply({ content: "Nothing is playing.", ephemeral: true });
+          await replyWarn(interaction, "Nothing is playing right now.");
           return;
         }
         const track = state.now;
@@ -393,7 +440,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       }
       case "queue": {
         if (state.queue.length === 0) {
-          await interaction.reply({ content: "Queue is empty.", ephemeral: true });
+          await replyWarn(interaction, "Queue is empty.");
           return;
         }
 
@@ -421,10 +468,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       }
       case "shuffle": {
         if (state.queue.length < 2) {
-          await interaction.reply({
-            content: "Not enough tracks in the queue to shuffle.",
-            ephemeral: true
-          });
+          await replyWarn(interaction, "Not enough tracks in the queue to shuffle.");
           return;
         }
         for (let i = state.queue.length - 1; i > 0; i -= 1) {
@@ -436,7 +480,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       }
       case "clear": {
         if (state.queue.length === 0) {
-          await interaction.reply({ content: "Queue is already empty.", ephemeral: true });
+          await replyWarn(interaction, "Queue is already empty.");
           return;
         }
         state.queue = [];
@@ -469,16 +513,12 @@ client.on(Events.InteractionCreate, async (interaction) => {
         return;
       }
       default:
-        await interaction.reply({ content: "Unknown command.", ephemeral: true });
+        await replyWarn(interaction, "Unknown command.");
     }
   } catch (err) {
     console.error(err);
     const message = err?.message || "Something went wrong.";
-    if (interaction.deferred) {
-      await interaction.editReply(message);
-    } else {
-      await interaction.reply({ content: message, ephemeral: true });
-    }
+    await replyError(interaction, message);
   }
 });
 
