@@ -5,6 +5,7 @@ const {
   Events,
   EmbedBuilder
 } = require("discord.js");
+const path = require("path");
 const { Shoukaku, Connectors } = require("shoukaku");
 
 const client = new Client({
@@ -27,6 +28,69 @@ const queues = new Map();
 let lastLavalinkHint = 0;
 let lavalinkReady = false;
 let lavalinkAuthFailed = false;
+
+const ICONS = {
+  play: "play.png",
+  pause: "pause.png",
+  resume: "resume.png",
+  skip: "skip.png",
+  nowplaying: "nowplaying.png",
+  queue: "queue.png",
+  shuffle: "shuffle.png",
+  leave: "leave.png",
+  warning: "warning.png",
+  error: "error.png"
+};
+
+const ICON_COLORS = {
+  play: 0x1f1e26,
+  pause: 0x23212f,
+  resume: 0x21202c,
+  skip: 0x1e1d25,
+  nowplaying: 0x1d1c22,
+  queue: 0x1f1e27,
+  shuffle: 0x1e1d24,
+  leave: 0x201f2a,
+  warning: 0x282219,
+  error: 0x281d1d
+};
+
+function iconPath(name) {
+  const file = ICONS[name];
+  if (!file) return null;
+  return path.join(__dirname, "..", "assets", file);
+}
+
+function buildEmbedMessage({ title, description, icon }) {
+  const embed = new EmbedBuilder();
+  if (icon && ICON_COLORS[icon]) {
+    embed.setColor(ICON_COLORS[icon]);
+  }
+  const normalizeShort = (text) => (text ? text.replace(/[.!?]+$/u, "") : text);
+  if (title) {
+    if (icon && ICONS[icon]) {
+      embed.setAuthor({ name: title, iconURL: `attachment://${ICONS[icon]}` });
+    } else {
+      embed.setTitle(title);
+    }
+  }
+  if (description) {
+    if (description.length <= 60) {
+      const shortText = normalizeShort(description);
+      if (!title) {
+        embed.setTitle(shortText);
+      } else if (icon && ICONS[icon]) {
+        embed.setAuthor({ name: shortText, iconURL: `attachment://${ICONS[icon]}` });
+      } else {
+        embed.setTitle(shortText);
+      }
+    } else {
+      embed.setDescription(description);
+    }
+  }
+  const files = icon && ICONS[icon] ? [{ attachment: iconPath(icon), name: ICONS[icon] }] : [];
+  return { embeds: [embed], files };
+}
 
 function getLavalinkHttpUrl() {
   const host = process.env.LAVALINK_HOST || "localhost";
@@ -250,19 +314,29 @@ function normalizeLoadResult(res) {
 }
 
 async function replyError(interaction, message) {
+  const payload = buildEmbedMessage({
+    title: "Error",
+    description: message,
+    icon: "error"
+  });
   if (interaction.deferred) {
-    await interaction.editReply(message);
+    await interaction.editReply(payload);
     return;
   }
-  await interaction.reply({ content: message, ephemeral: true });
+  await interaction.reply({ ...payload, ephemeral: true });
 }
 
 async function replyWarn(interaction, message) {
+  const payload = buildEmbedMessage({
+    title: "Warning",
+    description: message,
+    icon: "warning"
+  });
   if (interaction.deferred) {
-    await interaction.editReply(message);
+    await interaction.editReply(payload);
     return;
   }
-  await interaction.reply({ content: message, ephemeral: true });
+  await interaction.reply({ ...payload, ephemeral: true });
 }
 
 async function playNext(guildId) {
@@ -341,17 +415,33 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
         if (loadType === "LOAD_FAILED") {
           await interaction.editReply(
-            "I couldn't load that track. The provider might be blocked or unavailable."
+            buildEmbedMessage({
+              title: "Load failed",
+              description: "I couldn't load that track. The provider might be blocked or unavailable.",
+              icon: "warning"
+            })
           );
           return;
         }
         if (loadType === "NO_MATCHES") {
-          await interaction.editReply("No matches found. Try another link or search.");
+          await interaction.editReply(
+            buildEmbedMessage({
+              title: "No matches",
+              description: "No matches found. Try another link or search.",
+              icon: "warning"
+            })
+          );
           return;
         }
 
         if (!result || result.tracks.length === 0) {
-          await interaction.editReply("No matches found.");
+          await interaction.editReply(
+            buildEmbedMessage({
+              title: "No matches",
+              description: "No matches found. Try another link or search.",
+              icon: "warning"
+            })
+          );
           return;
         }
 
@@ -364,12 +454,22 @@ client.on(Events.InteractionCreate, async (interaction) => {
         if (isCollection && result.tracks.length > 1) {
           state.queue.push(...result.tracks);
           await interaction.editReply(
-            `Queued playlist: ${result.playlistInfo?.name || "Unknown"} (${result.tracks.length} tracks)`
+            buildEmbedMessage({
+              title: "Queued playlist",
+              description: `${result.playlistInfo?.name || "Unknown"} (${result.tracks.length} tracks)`,
+              icon: "queue"
+            })
           );
         } else {
           const track = result.tracks[0];
           state.queue.push(track);
-          await interaction.editReply(`Queued: ${trackTitle(track)}`);
+          await interaction.editReply(
+            buildEmbedMessage({
+              title: "Queued",
+              description: trackTitle(track),
+              icon: "play"
+            })
+          );
         }
 
         await playNext(interaction.guild.id);
@@ -388,7 +488,13 @@ client.on(Events.InteractionCreate, async (interaction) => {
           }
           if (position === 0) {
             await state.player.stopTrack();
-            await interaction.reply("Skipped current track.");
+            await interaction.reply(
+              buildEmbedMessage({
+                title: "Skipped",
+                description: "Skipped current track.",
+                icon: "skip"
+              })
+            );
             return;
           }
           if (position < 1 || position > state.queue.length) {
@@ -397,11 +503,23 @@ client.on(Events.InteractionCreate, async (interaction) => {
           }
           state.queue.splice(0, position - 1);
           await state.player.stopTrack();
-          await interaction.reply(`Skipped to position ${position}.`);
+          await interaction.reply(
+            buildEmbedMessage({
+              title: "Skipped",
+              description: `Skipped to position ${position}.`,
+              icon: "skip"
+            })
+          );
           return;
         }
         await state.player.stopTrack();
-        await interaction.reply("Skipped.");
+        await interaction.reply(
+          buildEmbedMessage({
+            title: "Skipped",
+            description: "Skipped.",
+            icon: "skip"
+          })
+        );
         return;
       }
       case "pause": {
@@ -410,7 +528,13 @@ client.on(Events.InteractionCreate, async (interaction) => {
           return;
         }
         await state.player.setPaused(true);
-        await interaction.reply("Paused.");
+        await interaction.reply(
+          buildEmbedMessage({
+            title: "Paused",
+            description: "Playback paused.",
+            icon: "pause"
+          })
+        );
         return;
       }
       case "resume": {
@@ -419,7 +543,13 @@ client.on(Events.InteractionCreate, async (interaction) => {
           return;
         }
         await state.player.setPaused(false);
-        await interaction.reply("Resumed.");
+        await interaction.reply(
+          buildEmbedMessage({
+            title: "Resumed",
+            description: "Playback resumed.",
+            icon: "resume"
+          })
+        );
         return;
       }
       case "nowplaying": {
@@ -429,13 +559,20 @@ client.on(Events.InteractionCreate, async (interaction) => {
         }
         const track = state.now;
         const embed = new EmbedBuilder()
-          .setTitle("Now Playing")
+          .setColor(ICON_COLORS.nowplaying)
+          .setAuthor({
+            name: "Now Playing",
+            iconURL: `attachment://${ICONS.nowplaying}`
+          })
           .setDescription(`[${track.info.title}](${track.info.uri})`)
           .addFields(
             { name: "Artist", value: track.info.author || "Unknown", inline: true },
             { name: "Duration", value: formatDuration(track.info.length), inline: true }
           );
-        await interaction.reply({ embeds: [embed] });
+        await interaction.reply({
+          embeds: [embed],
+          files: [{ attachment: iconPath("nowplaying"), name: ICONS.nowplaying }]
+        });
         return;
       }
       case "queue": {
@@ -450,7 +587,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
         });
         const more = state.queue.length > 10 ? `\n...and ${state.queue.length - 10} more` : "";
         const embed = new EmbedBuilder()
-          .setTitle("Queue")
+          .setColor(ICON_COLORS.queue)
+          .setAuthor({
+            name: "Queue",
+            iconURL: `attachment://${ICONS.queue}`
+          })
           .setDescription(lines.join("\n") + more)
           .addFields(
             { name: "Total in Queue", value: String(state.queue.length), inline: true },
@@ -463,7 +604,10 @@ client.on(Events.InteractionCreate, async (interaction) => {
             value: `[${state.now.info.title}](${state.now.info.uri})`
           });
         }
-        await interaction.reply({ embeds: [embed] });
+        await interaction.reply({
+          embeds: [embed],
+          files: [{ attachment: iconPath("queue"), name: ICONS.queue }]
+        });
         return;
       }
       case "shuffle": {
@@ -475,7 +619,13 @@ client.on(Events.InteractionCreate, async (interaction) => {
           const j = Math.floor(Math.random() * (i + 1));
           [state.queue[i], state.queue[j]] = [state.queue[j], state.queue[i]];
         }
-        await interaction.reply("Queue shuffled.");
+        await interaction.reply(
+          buildEmbedMessage({
+            title: "Shuffled",
+            description: "Queue shuffled.",
+            icon: "shuffle"
+          })
+        );
         return;
       }
       case "clear": {
@@ -484,7 +634,13 @@ client.on(Events.InteractionCreate, async (interaction) => {
           return;
         }
         state.queue = [];
-        await interaction.reply("Queue cleared.");
+        await interaction.reply(
+          buildEmbedMessage({
+            title: "Queue cleared",
+            description: "All queued tracks removed.",
+            icon: "queue"
+          })
+        );
         return;
       }
       case "leave": {
@@ -500,7 +656,13 @@ client.on(Events.InteractionCreate, async (interaction) => {
         } catch (err) {
           console.error("Error leaving voice channel", err);
         }
-        await interaction.reply("Disconnected.");
+        await interaction.reply(
+          buildEmbedMessage({
+            title: "Disconnected",
+            description: "Left the voice channel.",
+            icon: "leave"
+          })
+        );
         return;
       }
       case "volume": {
@@ -509,7 +671,13 @@ client.on(Events.InteractionCreate, async (interaction) => {
         if (state.player) {
           await state.player.setVolume(level);
         }
-        await interaction.reply(`Volume set to ${level}.`);
+        await interaction.reply(
+          buildEmbedMessage({
+            title: "Volume",
+            description: `Volume set to ${level}.`,
+            icon: "queue"
+          })
+        );
         return;
       }
       default:
