@@ -46,16 +46,16 @@ const ICONS = {
 };
 
 const ICON_COLORS = {
-  play: 0x1f1e26,
-  pause: 0x23212f,
-  resume: 0x21202c,
-  skip: 0x1e1d25,
-  nowplaying: 0x1d1c22,
-  queue: 0x1f1e27,
-  shuffle: 0x1e1d24,
-  leave: 0x201f2a,
-  warning: 0x282219,
-  error: 0x281d1d
+  play: 0x6366f1,
+  pause: 0x6366f1,
+  resume: 0x6366f1,
+  skip: 0x6366f1,
+  nowplaying: 0x6366f1,
+  queue: 0x6366f1,
+  shuffle: 0x6366f1,
+  leave: 0x6366f1,
+  warning: 0xfbbf24,
+  error: 0xf87171
 };
 
 function iconPath(name) {
