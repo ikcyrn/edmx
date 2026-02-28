@@ -127,6 +127,13 @@ async function ensurePlayer(interaction, state) {
     throw new Error("Lavalink is starting. Try again in a moment.");
   }
   await waitForNodeReady();
+  if (shoukaku.connections.has(interaction.guild.id)) {
+    try {
+      shoukaku.leaveVoiceChannel(interaction.guild.id);
+    } catch (err) {
+      console.error("Error leaving stale voice connection", err);
+    }
+  }
   const member = await interaction.guild.members.fetch(interaction.user.id);
   const voiceChannel = member.voice.channel;
   if (!voiceChannel) {
@@ -426,6 +433,11 @@ client.on(Events.VoiceStateUpdate, (oldState, newState) => {
   if (oldState.channelId && !newState.channelId) {
     const state = getState(newState.guild.id);
     resetState(state);
+    try {
+      shoukaku.leaveVoiceChannel(newState.guild.id);
+    } catch (err) {
+      console.error("Error leaving voice channel on disconnect", err);
+    }
   }
 });
 
