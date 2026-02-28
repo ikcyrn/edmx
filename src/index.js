@@ -798,6 +798,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
             icon: "shuffle"
           })
         );
+        await updateQueueMessage(interaction.guild.id);
         return;
       }
       case "clear": {
