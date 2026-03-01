@@ -22,7 +22,6 @@ const commands = [
     ),
   new SlashCommandBuilder().setName("pause").setDescription("Pause playback"),
   new SlashCommandBuilder().setName("resume").setDescription("Resume playback"),
-  new SlashCommandBuilder().setName("stop").setDescription("Stop playback and clear current track"),
   new SlashCommandBuilder().setName("nowplaying").setDescription("Show the current track"),
   new SlashCommandBuilder().setName("queue").setDescription("Show the queue"),
   new SlashCommandBuilder().setName("shuffle").setDescription("Shuffle the queue"),

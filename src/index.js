@@ -41,7 +41,6 @@ const ICONS = {
   pause: "pause.png",
   resume: "resume.png",
   skip: "skip.png",
-  stop: "stop.png",
   nowplaying: "nowplaying.png",
   queue: "queue.png",
   shuffle: "shuffle.png",
@@ -55,7 +54,6 @@ const ICON_COLORS = {
   pause: 0x6366f1,
   resume: 0x6366f1,
   skip: 0x6366f1,
-  stop: 0x6366f1,
   nowplaying: 0x6366f1,
   queue: 0x6366f1,
   shuffle: 0x6366f1,
@@ -878,24 +876,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
             icon: "resume"
           })
         );
-        return;
-      }
-      case "stop": {
-        if (!state.player || !state.now) {
-          await replyWarn(interaction, "Nothing is playing right now.");
-          return;
-        }
-        await state.player.stopTrack();
-        state.now = null;
-        state.playing = false;
-        await interaction.reply(
-          buildEmbedMessage({
-            title: "Stopped",
-            description: "Playback stopped.",
-            icon: "stop"
-          })
-        );
-        await updateQueueMessage(interaction.guild.id);
         return;
       }
       case "nowplaying": {
