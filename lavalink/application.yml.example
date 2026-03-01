@@ -26,12 +26,19 @@ lavalink:
 logging:
   level:
     root: INFO
+    dev.lavalink.youtube.http.YoutubeOauth2Handler: INFO
 
 plugins:
   youtube:
     enabled: true
     allowSearch: true
     cookies: "/opt/cookies.txt"
+    clients:
+      - WEB
+      - WEBEMBEDDED
+      - MWEB
+    oauth:
+      enabled: true
   # LavaSrc plugin config (Spotify/YouTube Music resolvers).
   # Lavalink will auto-download the plugin above on startup.
   lavasrc:
