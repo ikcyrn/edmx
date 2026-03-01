@@ -497,9 +497,13 @@ function getNodeOverloadReason() {
   const node = shoukaku.nodes.get("main");
   const stats = node?.stats;
   if (!stats) return null;
+  if (typeof stats.players === "number" && stats.players <= 1) return null;
   const cpuLoad = stats.cpu?.systemLoad ?? stats.cpu?.lavalinkLoad;
-  if (typeof cpuLoad === "number" && cpuLoad >= OVERLOAD_CPU_THRESHOLD) {
-    return "High CPU load";
+  if (typeof cpuLoad === "number") {
+    const normalized = cpuLoad > 1 ? cpuLoad / 100 : cpuLoad;
+    if (normalized >= OVERLOAD_CPU_THRESHOLD) {
+      return "High CPU load";
+    }
   }
   const mem = stats.memory;
   let freeBytes = null;
