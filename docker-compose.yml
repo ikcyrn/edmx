@@ -6,17 +6,25 @@ services:
       args:
         LAVALINK_VERSION: 4.1.1
     container_name: lavalink
+    env_file:
+      - .env
     volumes:
       - ./lavalink/application.yml:/opt/application.yml:ro
     ports:
       - "2333:2333"
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS -H \"Authorization: $LAVALINK_PASSWORD\" http://localhost:2333/v4/info >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
 
   bot:
     build: .
     container_name: edmx-bot
     depends_on:
-      - lavalink
+      lavalink:
+        condition: service_healthy
     env_file:
       - .env
     environment:
