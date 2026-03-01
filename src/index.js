@@ -62,6 +62,9 @@ const ICON_COLORS = {
   error: 0xf87171
 };
 
+const OVERLOAD_CPU_THRESHOLD = 0.9;
+const OVERLOAD_MEM_FREE_MB = 256;
+
 function iconPath(name) {
   const file = ICONS[name];
   if (!file) return null;
@@ -117,6 +120,30 @@ function toUserMessage(err) {
   ];
   if (allowlist.some((rx) => rx.test(msg))) return msg;
   return "Something went wrong. Please try again in a moment.";
+}
+
+function getNodeOverloadReason() {
+  const node = shoukaku.nodes.get("main");
+  const stats = node?.stats;
+  if (!stats) return null;
+  const cpuLoad = stats.cpu?.systemLoad ?? stats.cpu?.lavalinkLoad;
+  if (typeof cpuLoad === "number" && cpuLoad >= OVERLOAD_CPU_THRESHOLD) {
+    return "High CPU load";
+  }
+  const mem = stats.memory;
+  let freeBytes = null;
+  if (typeof mem?.free === "number") {
+    freeBytes = mem.free;
+  } else if (typeof mem?.reservable === "number" && typeof mem?.used === "number") {
+    freeBytes = mem.reservable - mem.used;
+  }
+  if (typeof freeBytes === "number") {
+    const freeMb = freeBytes / (1024 * 1024);
+    if (freeMb <= OVERLOAD_MEM_FREE_MB) {
+      return "Low memory";
+    }
+  }
+  return null;
 }
 
 const QUEUE_PAGE_SIZE = 10;
@@ -747,6 +774,18 @@ client.on(Events.InteractionCreate, async (interaction) => {
       case "play": {
         await interaction.deferReply();
         await ensurePlayer(interaction, state);
+
+        const overloadReason = getNodeOverloadReason();
+        if (overloadReason) {
+          await interaction.editReply(
+            buildEmbedMessage({
+              title: "Busy",
+              description: "I'm a bit busy right now. Please try again in a minute.",
+              icon: "warning"
+            })
+          );
+          return;
+        }
 
         const query = interaction.options.getString("query", true);
         const res = await resolveTracks(query);
