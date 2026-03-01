@@ -485,7 +485,7 @@ async function resolveTracks(query) {
   const node = shoukaku.nodes.get("main");
   if (!node) throw new Error("Lavalink node is not ready yet.");
 
-  const identifier = /^https?:\/\//.test(query) ? query : `ytsearch:${query}`;
+  const identifier = /^https?:\/\//.test(query) ? query : `scsearch:${query}`;
   return node.rest.resolve(identifier);
 }
 

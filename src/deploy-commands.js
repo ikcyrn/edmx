@@ -8,7 +8,7 @@ const commands = [
     .addStringOption((opt) =>
       opt
         .setName("query")
-        .setDescription("Spotify/YouTube Music link or search query")
+        .setDescription("Spotify/SoundCloud link or search query")
         .setRequired(true)
     ),
   new SlashCommandBuilder()
