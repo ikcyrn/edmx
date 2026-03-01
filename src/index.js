@@ -213,12 +213,19 @@ function getLavalinkHttpUrl() {
   return `http://${host}:${port}/v4/info`;
 }
 
-function waitForNodeReady() {
-  return new Promise((resolve) => {
+function waitForNodeReady(timeoutMs = 10000) {
+  return new Promise((resolve, reject) => {
     const existing = shoukaku.nodes.get("main");
     if (existing && existing.state === 1) {
       resolve();
       return;
+    }
+    if (existing && typeof existing.connect === "function" && existing.state !== 1) {
+      try {
+        existing.connect();
+      } catch (err) {
+        console.error("Failed to trigger Lavalink node connect", err);
+      }
     }
     const onReady = (name) => {
       if (name === "main") {
@@ -227,6 +234,10 @@ function waitForNodeReady() {
       }
     };
     shoukaku.on("ready", onReady);
+    setTimeout(() => {
+      shoukaku.off("ready", onReady);
+      reject(new Error("Lavalink websocket not connected. Try again in a moment."));
+    }, timeoutMs);
   });
 }
 
