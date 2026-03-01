@@ -362,6 +362,16 @@ function trackTitle(track) {
   return `${title}${author}`;
 }
 
+function isPlayerConnected(player) {
+  const conn = player?.connection;
+  if (!conn) return false;
+  if (typeof conn.connected === "boolean") return conn.connected;
+  if (typeof conn.ready === "boolean") return conn.ready;
+  if (typeof conn.state === "string") return conn.state.toLowerCase() === "connected";
+  if (typeof conn.state === "number") return conn.state === 2;
+  return true;
+}
+
 function buildTrackEmbed(track, title, icon, context) {
   const info = track.info || {};
   const embed = new EmbedBuilder()
@@ -428,6 +438,14 @@ async function ensurePlayer(interaction, state) {
   }
 
   if (state.player) {
+    if (!isPlayerConnected(state.player)) {
+      try {
+        await state.player.destroy();
+      } catch (err) {
+        console.error("Error destroying disconnected player", err);
+      }
+      state.player = null;
+    }
     const currentChannelId = state.player.connection?.channelId;
     if (currentChannelId && currentChannelId !== voiceChannel.id) {
       throw new Error(`I'm already playing in <#${currentChannelId}>. Join me there or use /leave first.`);
@@ -639,6 +657,9 @@ async function playNext(guildId) {
   }
   if (state.player.setVolume) {
     await state.player.setVolume(state.volume);
+  }
+  if (state.player.setPaused) {
+    await state.player.setPaused(false);
   }
   await state.player.playTrack({ track: { encoded: next.encoded } });
   await updateQueueMessage(guildId);
