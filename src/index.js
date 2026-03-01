@@ -101,6 +101,24 @@ function buildEmbedMessage({ title, description, icon }) {
   return { embeds: [embed], files };
 }
 
+function toUserMessage(err) {
+  const msg = String(err?.message || "").trim();
+  if (!msg) return "Something went wrong. Please try again in a moment.";
+  const allowlist = [
+    /^Lavalink auth failed/i,
+    /^Lavalink is starting/i,
+    /^Lavalink node is not ready/i,
+    /^Audio connection not ready/i,
+    /^Join a voice channel first\./i,
+    /^I can't see that voice channel/i,
+    /^I need permission to connect/i,
+    /^I need permission to speak/i,
+    /^I'm already playing in <#\d+>\./i
+  ];
+  if (allowlist.some((rx) => rx.test(msg))) return msg;
+  return "Something went wrong. Please try again in a moment.";
+}
+
 const QUEUE_PAGE_SIZE = 10;
 const QUEUE_LINE_WIDTH = 36;
 
@@ -964,7 +982,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
   } catch (err) {
     console.error(err);
-    const message = err?.message || "Something went wrong.";
+    const message = toUserMessage(err);
     await replyError(interaction, message);
   }
 });
