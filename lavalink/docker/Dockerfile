@@ -4,7 +4,7 @@ WORKDIR /opt
 
 ARG LAVALINK_VERSION=4.1.1
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends ca-certificates curl python3 yt-dlp \
+  && apt-get install -y --no-install-recommends ca-certificates curl python3 yt-dlp ffmpeg \
   && rm -rf /var/lib/apt/lists/*
 RUN curl -L -o Lavalink.jar "https://github.com/lavalink-devs/Lavalink/releases/download/${LAVALINK_VERSION}/Lavalink.jar"
 
