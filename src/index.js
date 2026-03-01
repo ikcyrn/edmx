@@ -34,6 +34,7 @@ const queues = new Map();
 let lastLavalinkHint = 0;
 let lavalinkReady = false;
 let lavalinkAuthFailed = false;
+let nodeReconnectTimer = null;
 
 const ICONS = {
   play: "play.png",
@@ -241,6 +242,26 @@ function waitForNodeReady(timeoutMs = 10000) {
       reject(new Error("Audio connection not ready. Try again in a moment."));
     }, timeoutMs);
   });
+}
+
+function ensureNodeReconnectLoop() {
+  if (nodeReconnectTimer) return;
+  nodeReconnectTimer = setInterval(() => {
+    const node = shoukaku.nodes.get("main");
+    if (!node) return;
+    if (node.state === 1) {
+      clearInterval(nodeReconnectTimer);
+      nodeReconnectTimer = null;
+      return;
+    }
+    if (typeof node.connect === "function") {
+      try {
+        node.connect();
+      } catch (err) {
+        console.error("Failed to connect Lavalink node", err);
+      }
+    }
+  }, 5000);
 }
 
 async function waitForLavalink() {
@@ -579,18 +600,15 @@ async function playNext(guildId) {
 client.once(Events.ClientReady, async () => {
   console.log(`Logged in as ${client.user.tag}`);
   await waitForLavalink();
-  const node = shoukaku.nodes.get("main");
-  if (node && node.state !== 1 && typeof node.connect === "function") {
-    try {
-      node.connect();
-    } catch (err) {
-      console.error("Failed to connect Lavalink node", err);
-    }
-  }
+  ensureNodeReconnectLoop();
 });
 
 shoukaku.on("ready", (name) => {
   console.log(`Lavalink node ${name} connected.`);
+  if (nodeReconnectTimer) {
+    clearInterval(nodeReconnectTimer);
+    nodeReconnectTimer = null;
+  }
 });
 
 shoukaku.on("error", (name, error) => {
@@ -602,6 +620,9 @@ shoukaku.on("error", (name, error) => {
     console.log(
       "Lavalink not ready or auth mismatch. Waiting for it to become available..."
     );
+  }
+  if (code === "ECONNREFUSED") {
+    ensureNodeReconnectLoop();
   }
   console.error(`Lavalink node ${name} error`, error);
 });
