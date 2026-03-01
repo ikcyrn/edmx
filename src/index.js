@@ -1250,8 +1250,12 @@ client.on(Events.InteractionCreate, async (interaction) => {
           state.queue.push(track);
           await interaction.editReply(buildTrackEmbed(track, t(interaction.guild.id, "now_playing_title"), "nowplaying", null, interaction.guild.id));
         }
-
-        await playNext(interaction.guild.id);
+        const isPlaying = Boolean(state.now || state.playing || state.player?.track);
+        if (!isPlaying) {
+          await playNext(interaction.guild.id);
+        } else {
+          await updateQueueMessage(interaction.guild.id);
+        }
         return;
       }
       case "skip": {
