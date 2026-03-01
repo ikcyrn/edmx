@@ -236,7 +236,7 @@ function waitForNodeReady(timeoutMs = 10000) {
     shoukaku.on("ready", onReady);
     setTimeout(() => {
       shoukaku.off("ready", onReady);
-      reject(new Error("Lavalink websocket not connected. Try again in a moment."));
+      reject(new Error("Audio connection not ready. Try again in a moment."));
     }, timeoutMs);
   });
 }
@@ -577,6 +577,14 @@ async function playNext(guildId) {
 client.once(Events.ClientReady, async () => {
   console.log(`Logged in as ${client.user.tag}`);
   await waitForLavalink();
+  const node = shoukaku.nodes.get("main");
+  if (node && node.state !== 1 && typeof node.connect === "function") {
+    try {
+      node.connect();
+    } catch (err) {
+      console.error("Failed to connect Lavalink node", err);
+    }
+  }
 });
 
 shoukaku.on("ready", (name) => {
