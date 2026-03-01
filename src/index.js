@@ -411,6 +411,13 @@ async function ensurePlayer(interaction, state) {
     throw new Error("I need permission to speak in that voice channel.");
   }
 
+  if (!state.player) {
+    const existingPlayer = shoukaku.players?.get?.(interaction.guild.id);
+    if (existingPlayer) {
+      state.player = existingPlayer;
+    }
+  }
+
   const existingConnection = shoukaku.connections.get(interaction.guild.id);
   if (existingConnection && existingConnection.channelId && existingConnection.channelId !== voiceChannel.id) {
     try {
@@ -445,7 +452,25 @@ async function ensurePlayer(interaction, state) {
       });
     } catch (err) {
       const message = err?.message || "";
-      if (message.includes("voice connection") || message.includes("not established")) {
+      if (message.includes("existing connection")) {
+        const existingPlayer = shoukaku.players?.get?.(interaction.guild.id);
+        if (existingPlayer) {
+          state.player = existingPlayer;
+        } else {
+          try {
+            shoukaku.leaveVoiceChannel(interaction.guild.id);
+          } catch (leaveErr) {
+            console.error("Error leaving stale voice connection", leaveErr);
+          }
+          await new Promise((r) => setTimeout(r, 2000));
+          state.player = await shoukaku.joinVoiceChannel({
+            guildId: interaction.guild.id,
+            channelId: voiceChannel.id,
+            shardId: interaction.guild.shardId,
+            deaf: true
+          });
+        }
+      } else if (message.includes("voice connection") || message.includes("not established")) {
         try {
           shoukaku.leaveVoiceChannel(interaction.guild.id);
         } catch (leaveErr) {
