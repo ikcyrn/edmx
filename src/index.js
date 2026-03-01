@@ -65,11 +65,374 @@ const ICON_COLORS = {
 const OVERLOAD_CPU_THRESHOLD = 0.9;
 const OVERLOAD_MEM_FREE_MB = 256;
 
+const LANGUAGE_FILE = path.join(__dirname, "..", "data", "language.json");
+const LANGUAGE_NAMES = {
+  en: "English",
+  "zh-CN": "简体中文",
+  "zh-TW": "繁體中文",
+  ja: "日本語",
+  ko: "한국어"
+};
+const MESSAGES = {
+  en: {
+    error_title: "Error",
+    warning_title: "Warning",
+    error_generic: "Something went wrong. Please try again in a moment.",
+    err_lavalink_auth: "Lavalink auth failed. Please check `LAVALINK_PASSWORD`.",
+    err_lavalink_starting: "Lavalink is starting. Try again in a moment.",
+    err_lavalink_node_not_ready: "Lavalink node is not ready yet.",
+    err_audio_connection_not_ready: "Audio connection not ready. Try again in a moment.",
+    err_join_voice: "Join a voice channel first.",
+    err_join_voice_commands: "Join a voice channel to use music commands.",
+    err_join_voice_control: "Join voice channel to use commands.",
+    err_join_specific: "Join <#{channelId}> to control playback.",
+    err_view_channel: "I can't see that voice channel. Please update permissions.",
+    err_connect_channel: "I need permission to connect to that voice channel.",
+    err_speak_channel: "I need permission to speak in that voice channel.",
+    err_already_playing: "I'm already playing in <#{channelId}>. Join me there or use /leave first.",
+    load_failed_title: "Load failed",
+    load_failed_desc: "I couldn't load that track. The provider might be blocked or unavailable.",
+    no_matches_title: "No matches",
+    no_matches_desc: "No matches found. Try another link or search.",
+    queued_playlist_title: "Queued playlist",
+    queued_playlist_desc: "{name} ({count} tracks)",
+    now_playing_title: "Now Playing",
+    unknown_title: "Unknown title",
+    unknown_artist: "Unknown",
+    artist_label: "Artist",
+    duration_label: "Duration",
+    from_playlist_context: "From: {name} • {count} tracks",
+    warn_nothing_playing: "Nothing is playing right now.",
+    warn_negative_position: "Position cannot be negative. Use 0 to skip the current track.",
+    warn_position_out_of_range: "Position out of range. Queue length is {length}.",
+    skipped_title: "Skipped",
+    skipped_current_desc: "Skipped current track.",
+    skipped_to_desc: "Skipped to position {position}.",
+    skipped_desc: "Skipped.",
+    paused_title: "Paused",
+    paused_desc: "Playback paused.",
+    resumed_title: "Resumed",
+    resumed_desc: "Playback resumed.",
+    queue_title: "Queue",
+    queue_page_title: "Queue — Page {page}/{total}",
+    queue_empty_desc: "Queue is empty.",
+    queue_total_label: "Total in Queue",
+    queue_duration_label: "Total Duration",
+    now_playing_label: "Now Playing",
+    queue_empty_warn: "Queue is empty.",
+    queue_already_empty: "Queue is already empty.",
+    queue_not_enough_shuffle: "Not enough tracks in the queue to shuffle.",
+    shuffled_title: "Shuffled",
+    shuffled_desc: "Queue shuffled.",
+    queue_cleared_title: "Queue cleared",
+    queue_cleared_desc: "All queued tracks removed.",
+    disconnected_title: "Disconnected",
+    disconnected_desc: "Gracefully leaving...",
+    busy_title: "Busy",
+    busy_desc: "I'm a bit busy right now. Please try again in a minute.",
+    unknown_command: "Unknown command.",
+    language_set_title: "Language updated",
+    language_set_desc: "Language set to {language}.",
+    language_current_title: "Language",
+    language_current_desc: "Current language: {language}."
+  },
+  "zh-CN": {
+    error_title: "错误",
+    warning_title: "提醒",
+    error_generic: "出了点问题，请稍后再试。",
+    err_lavalink_auth: "音频服务器认证失败，请检查密码。",
+    err_lavalink_starting: "音频服务器正在启动，请稍后再试。",
+    err_lavalink_node_not_ready: "音频服务器还没准备好。",
+    err_audio_connection_not_ready: "语音连接还没准备好，请稍后再试。",
+    err_join_voice: "请先加入语音频道。",
+    err_join_voice_commands: "请加入语音频道后再使用指令。",
+    err_join_voice_control: "请加入语音频道以使用指令。",
+    err_join_specific: "请加入 <#{channelId}> 以控制播放。",
+    err_view_channel: "我看不到那个语音频道，请检查权限。",
+    err_connect_channel: "我需要连接语音频道的权限。",
+    err_speak_channel: "我需要在语音频道讲话的权限。",
+    err_already_playing: "我已经在 <#{channelId}> 播放了。请加入该频道或先用 /leave。",
+    load_failed_title: "加载失败",
+    load_failed_desc: "我无法加载该音频，可能被屏蔽或不可用。",
+    no_matches_title: "无匹配",
+    no_matches_desc: "没有找到结果，请换一个链接或搜索词。",
+    queued_playlist_title: "已加入播放列表",
+    queued_playlist_desc: "{name}（{count}首）",
+    now_playing_title: "正在播放",
+    unknown_title: "未知标题",
+    unknown_artist: "未知",
+    artist_label: "艺术家",
+    duration_label: "时长",
+    from_playlist_context: "来自：{name} • {count}首",
+    warn_nothing_playing: "目前没有在播放。",
+    warn_negative_position: "位置不能为负数。用 0 跳过当前曲目。",
+    warn_position_out_of_range: "位置超出范围。队列长度为 {length}。",
+    skipped_title: "已跳过",
+    skipped_current_desc: "已跳过当前曲目。",
+    skipped_to_desc: "已跳到第 {position} 首。",
+    skipped_desc: "已跳过。",
+    paused_title: "已暂停",
+    paused_desc: "播放已暂停。",
+    resumed_title: "已继续",
+    resumed_desc: "播放已继续。",
+    queue_title: "队列",
+    queue_page_title: "队列 — 第 {page}/{total} 页",
+    queue_empty_desc: "队列为空。",
+    queue_total_label: "队列总数",
+    queue_duration_label: "总时长",
+    now_playing_label: "正在播放",
+    queue_empty_warn: "队列为空。",
+    queue_already_empty: "队列已经为空。",
+    queue_not_enough_shuffle: "队列里曲目太少，无法打乱。",
+    shuffled_title: "已打乱",
+    shuffled_desc: "队列已打乱。",
+    queue_cleared_title: "队列已清空",
+    queue_cleared_desc: "已移除所有排队曲目。",
+    disconnected_title: "已断开",
+    disconnected_desc: "正在退出语音频道...",
+    busy_title: "繁忙",
+    busy_desc: "我现在有点忙，请稍后再试。",
+    unknown_command: "未知指令。",
+    language_set_title: "语言已更新",
+    language_set_desc: "语言已设置为 {language}。",
+    language_current_title: "语言",
+    language_current_desc: "当前语言：{language}。"
+  },
+  "zh-TW": {
+    error_title: "錯誤",
+    warning_title: "提醒",
+    error_generic: "出了點問題，請稍後再試。",
+    err_lavalink_auth: "音訊伺服器驗證失敗，請檢查密碼。",
+    err_lavalink_starting: "音訊伺服器正在啟動，請稍後再試。",
+    err_lavalink_node_not_ready: "音訊伺服器尚未就緒。",
+    err_audio_connection_not_ready: "語音連線尚未就緒，請稍後再試。",
+    err_join_voice: "請先加入語音頻道。",
+    err_join_voice_commands: "請加入語音頻道後再使用指令。",
+    err_join_voice_control: "請加入語音頻道以使用指令。",
+    err_join_specific: "請加入 <#{channelId}> 以控制播放。",
+    err_view_channel: "我看不到那個語音頻道，請檢查權限。",
+    err_connect_channel: "我需要連線語音頻道的權限。",
+    err_speak_channel: "我需要在語音頻道說話的權限。",
+    err_already_playing: "我已在 <#{channelId}> 播放。請加入該頻道或先用 /leave。",
+    load_failed_title: "載入失敗",
+    load_failed_desc: "無法載入該音訊，可能被封鎖或不可用。",
+    no_matches_title: "無相符",
+    no_matches_desc: "沒有找到結果，請換一個連結或搜尋詞。",
+    queued_playlist_title: "已加入播放清單",
+    queued_playlist_desc: "{name}（{count}首）",
+    now_playing_title: "正在播放",
+    unknown_title: "未知標題",
+    unknown_artist: "未知",
+    artist_label: "演出者",
+    duration_label: "時長",
+    from_playlist_context: "來自：{name} • {count}首",
+    warn_nothing_playing: "目前沒有在播放。",
+    warn_negative_position: "位置不能為負數。用 0 跳過目前曲目。",
+    warn_position_out_of_range: "位置超出範圍。隊列長度為 {length}。",
+    skipped_title: "已跳過",
+    skipped_current_desc: "已跳過目前曲目。",
+    skipped_to_desc: "已跳到第 {position} 首。",
+    skipped_desc: "已跳過。",
+    paused_title: "已暫停",
+    paused_desc: "播放已暫停。",
+    resumed_title: "已繼續",
+    resumed_desc: "播放已繼續。",
+    queue_title: "隊列",
+    queue_page_title: "隊列 — 第 {page}/{total} 頁",
+    queue_empty_desc: "隊列為空。",
+    queue_total_label: "隊列總數",
+    queue_duration_label: "總時長",
+    now_playing_label: "正在播放",
+    queue_empty_warn: "隊列為空。",
+    queue_already_empty: "隊列已經為空。",
+    queue_not_enough_shuffle: "隊列曲目太少，無法打亂。",
+    shuffled_title: "已打亂",
+    shuffled_desc: "隊列已打亂。",
+    queue_cleared_title: "隊列已清空",
+    queue_cleared_desc: "已移除所有排隊曲目。",
+    disconnected_title: "已斷開",
+    disconnected_desc: "正在離開語音頻道...",
+    busy_title: "繁忙",
+    busy_desc: "我現在有點忙，請稍後再試。",
+    unknown_command: "未知指令。",
+    language_set_title: "語言已更新",
+    language_set_desc: "語言已設定為 {language}。",
+    language_current_title: "語言",
+    language_current_desc: "目前語言：{language}。"
+  },
+  ja: {
+    error_title: "エラー",
+    warning_title: "注意",
+    error_generic: "問題が発生しました。しばらくしてからもう一度お試しください。",
+    err_lavalink_auth: "音声サーバーの認証に失敗しました。パスワードを確認してください。",
+    err_lavalink_starting: "音声サーバーを起動中です。少し待ってから再試行してください。",
+    err_lavalink_node_not_ready: "音声サーバーがまだ準備できていません。",
+    err_audio_connection_not_ready: "音声接続がまだ準備できていません。少し待ってから再試行してください。",
+    err_join_voice: "先にボイスチャンネルに参加してください。",
+    err_join_voice_commands: "ボイスチャンネルに参加してからコマンドを使用してください。",
+    err_join_voice_control: "コマンドを使用するにはボイスチャンネルに参加してください。",
+    err_join_specific: "<#{channelId}> に参加して操作してください。",
+    err_view_channel: "そのボイスチャンネルを見る権限がありません。権限を確認してください。",
+    err_connect_channel: "そのボイスチャンネルに接続する権限が必要です。",
+    err_speak_channel: "そのボイスチャンネルで話す権限が必要です。",
+    err_already_playing: "すでに <#{channelId}> で再生中です。参加するか /leave を使ってください。",
+    load_failed_title: "読み込み失敗",
+    load_failed_desc: "トラックを読み込めませんでした。プロバイダーが利用できない可能性があります。",
+    no_matches_title: "見つかりません",
+    no_matches_desc: "一致する結果がありません。別のリンクか検索語を試してください。",
+    queued_playlist_title: "プレイリストを追加",
+    queued_playlist_desc: "{name}（{count}曲）",
+    now_playing_title: "再生中",
+    unknown_title: "不明なタイトル",
+    unknown_artist: "不明",
+    artist_label: "アーティスト",
+    duration_label: "再生時間",
+    from_playlist_context: "元：{name} • {count}曲",
+    warn_nothing_playing: "再生中の曲がありません。",
+    warn_negative_position: "位置は負の値にできません。0 で現在の曲をスキップします。",
+    warn_position_out_of_range: "位置が範囲外です。キューの長さは {length} です。",
+    skipped_title: "スキップ",
+    skipped_current_desc: "現在の曲をスキップしました。",
+    skipped_to_desc: "{position} 番目へスキップしました。",
+    skipped_desc: "スキップしました。",
+    paused_title: "一時停止",
+    paused_desc: "再生を一時停止しました。",
+    resumed_title: "再開",
+    resumed_desc: "再生を再開しました。",
+    queue_title: "キュー",
+    queue_page_title: "キュー — {page}/{total} ページ",
+    queue_empty_desc: "キューは空です。",
+    queue_total_label: "キュー数",
+    queue_duration_label: "合計時間",
+    now_playing_label: "再生中",
+    queue_empty_warn: "キューは空です。",
+    queue_already_empty: "キューはすでに空です。",
+    queue_not_enough_shuffle: "シャッフルするには曲数が足りません。",
+    shuffled_title: "シャッフル",
+    shuffled_desc: "キューをシャッフルしました。",
+    queue_cleared_title: "キューをクリア",
+    queue_cleared_desc: "キュー内の曲をすべて削除しました。",
+    disconnected_title: "切断",
+    disconnected_desc: "ボイスチャンネルから退出します...",
+    busy_title: "混雑中",
+    busy_desc: "ただいま混雑しています。少し待ってから再試行してください。",
+    unknown_command: "不明なコマンドです。",
+    language_set_title: "言語を更新しました",
+    language_set_desc: "言語を {language} に設定しました。",
+    language_current_title: "言語",
+    language_current_desc: "現在の言語：{language}"
+  },
+  ko: {
+    error_title: "오류",
+    warning_title: "안내",
+    error_generic: "문제가 발생했습니다. 잠시 후 다시 시도해 주세요.",
+    err_lavalink_auth: "오디오 서버 인증에 실패했습니다. 비밀번호를 확인해 주세요.",
+    err_lavalink_starting: "오디오 서버가 시작 중입니다. 잠시 후 다시 시도해 주세요.",
+    err_lavalink_node_not_ready: "오디오 서버가 아직 준비되지 않았습니다.",
+    err_audio_connection_not_ready: "음성 연결이 아직 준비되지 않았습니다. 잠시 후 다시 시도해 주세요.",
+    err_join_voice: "먼저 음성 채널에 들어가 주세요.",
+    err_join_voice_commands: "음성 채널에 들어간 후 명령을 사용해 주세요.",
+    err_join_voice_control: "명령을 사용하려면 음성 채널에 들어가 주세요.",
+    err_join_specific: "<#{channelId}>에 들어가서 제어해 주세요.",
+    err_view_channel: "해당 음성 채널을 볼 수 없습니다. 권한을 확인해 주세요.",
+    err_connect_channel: "해당 음성 채널에 연결할 권한이 필요합니다.",
+    err_speak_channel: "해당 음성 채널에서 말할 권한이 필요합니다.",
+    err_already_playing: "이미 <#{channelId}>에서 재생 중입니다. 들어오거나 /leave를 사용하세요.",
+    load_failed_title: "불러오기 실패",
+    load_failed_desc: "트랙을 불러올 수 없습니다. 제공자가 차단되었을 수 있습니다.",
+    no_matches_title: "검색 결과 없음",
+    no_matches_desc: "결과를 찾지 못했습니다. 다른 링크나 검색어를 사용해 주세요.",
+    queued_playlist_title: "플레이리스트 추가됨",
+    queued_playlist_desc: "{name} ({count}곡)",
+    now_playing_title: "재생 중",
+    unknown_title: "알 수 없는 제목",
+    unknown_artist: "알 수 없음",
+    artist_label: "아티스트",
+    duration_label: "길이",
+    from_playlist_context: "출처: {name} • {count}곡",
+    warn_nothing_playing: "현재 재생 중인 곡이 없습니다.",
+    warn_negative_position: "위치는 음수가 될 수 없습니다. 0은 현재 곡을 건너뜁니다.",
+    warn_position_out_of_range: "범위를 벗어났습니다. 큐 길이는 {length}입니다.",
+    skipped_title: "건너뜀",
+    skipped_current_desc: "현재 곡을 건너뛰었습니다.",
+    skipped_to_desc: "{position}번으로 건너뛰었습니다.",
+    skipped_desc: "건너뛰었습니다.",
+    paused_title: "일시정지",
+    paused_desc: "재생을 일시정지했습니다.",
+    resumed_title: "재생",
+    resumed_desc: "재생을 다시 시작했습니다.",
+    queue_title: "큐",
+    queue_page_title: "큐 — {page}/{total} 페이지",
+    queue_empty_desc: "큐가 비어 있습니다.",
+    queue_total_label: "큐 수",
+    queue_duration_label: "총 길이",
+    now_playing_label: "재생 중",
+    queue_empty_warn: "큐가 비어 있습니다.",
+    queue_already_empty: "큐는 이미 비어 있습니다.",
+    queue_not_enough_shuffle: "셔플할 곡이 충분하지 않습니다.",
+    shuffled_title: "셔플됨",
+    shuffled_desc: "큐를 섞었습니다.",
+    queue_cleared_title: "큐 비움",
+    queue_cleared_desc: "큐의 모든 곡을 제거했습니다.",
+    disconnected_title: "연결 해제",
+    disconnected_desc: "음성 채널에서 나가는 중...",
+    busy_title: "혼잡",
+    busy_desc: "현재 바쁩니다. 잠시 후 다시 시도해 주세요.",
+    unknown_command: "알 수 없는 명령입니다.",
+    language_set_title: "언어 업데이트됨",
+    language_set_desc: "언어를 {language}(으)로 설정했습니다.",
+    language_current_title: "언어",
+    language_current_desc: "현재 언어: {language}"
+  }
+};
+
 function iconPath(name) {
   const file = ICONS[name];
   if (!file) return null;
   const full = path.join(__dirname, "..", "assets", file);
   return fs.existsSync(full) ? full : null;
+}
+
+function loadLanguageStore() {
+  if (loadLanguageStore.cache) return loadLanguageStore.cache;
+  try {
+    const raw = fs.readFileSync(LANGUAGE_FILE, "utf8");
+    loadLanguageStore.cache = JSON.parse(raw);
+  } catch {
+    loadLanguageStore.cache = {};
+  }
+  return loadLanguageStore.cache;
+}
+
+function saveLanguageStore(store) {
+  const dir = path.dirname(LANGUAGE_FILE);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(LANGUAGE_FILE, JSON.stringify(store, null, 2));
+}
+
+function getGuildLanguage(guildId) {
+  if (!guildId) return "en";
+  const store = loadLanguageStore();
+  return store[guildId] || "en";
+}
+
+function setGuildLanguage(guildId, lang) {
+  const store = loadLanguageStore();
+  store[guildId] = lang;
+  saveLanguageStore(store);
+}
+
+function formatMessage(template, vars) {
+  if (!vars) return template;
+  return template.replace(/\{(\w+)\}/g, (_, key) => (vars[key] !== undefined ? String(vars[key]) : ""));
+}
+
+function t(guildId, key, vars) {
+  const lang = getGuildLanguage(guildId);
+  const table = MESSAGES[lang] || MESSAGES.en;
+  const fallback = MESSAGES.en[key] || key;
+  const template = table[key] || fallback;
+  return formatMessage(template, vars);
 }
 
 function buildEmbedMessage({ title, description, icon }) {
@@ -104,22 +467,30 @@ function buildEmbedMessage({ title, description, icon }) {
   return { embeds: [embed], files };
 }
 
-function toUserMessage(err) {
+function toUserMessage(err, guildId) {
   const msg = String(err?.message || "").trim();
-  if (!msg) return "Something went wrong. Please try again in a moment.";
-  const allowlist = [
-    /^Lavalink auth failed/i,
-    /^Lavalink is starting/i,
-    /^Lavalink node is not ready/i,
-    /^Audio connection not ready/i,
-    /^Join a voice channel first\./i,
-    /^I can't see that voice channel/i,
-    /^I need permission to connect/i,
-    /^I need permission to speak/i,
-    /^I'm already playing in <#\d+>\./i
+  if (!msg) return t(guildId, "error_generic");
+  const rules = [
+    { rx: /^Lavalink auth failed/i, key: "err_lavalink_auth" },
+    { rx: /^Lavalink is starting/i, key: "err_lavalink_starting" },
+    { rx: /^Lavalink node is not ready/i, key: "err_lavalink_node_not_ready" },
+    { rx: /^Audio connection not ready/i, key: "err_audio_connection_not_ready" },
+    { rx: /^Join a voice channel first\./i, key: "err_join_voice" },
+    { rx: /^I can't see that voice channel/i, key: "err_view_channel" },
+    { rx: /^I need permission to connect/i, key: "err_connect_channel" },
+    { rx: /^I need permission to speak/i, key: "err_speak_channel" },
+    { rx: /^I'm already playing in <#(\d+)>/i, key: "err_already_playing", capture: "channelId" }
   ];
-  if (allowlist.some((rx) => rx.test(msg))) return msg;
-  return "Something went wrong. Please try again in a moment.";
+  for (const rule of rules) {
+    const match = msg.match(rule.rx);
+    if (match) {
+      if (rule.capture && match[1]) {
+        return t(guildId, rule.key, { [rule.capture]: match[1] });
+      }
+      return t(guildId, rule.key);
+    }
+  }
+  return t(guildId, "error_generic");
 }
 
 function getNodeOverloadReason() {
@@ -157,10 +528,10 @@ function buildQueuePayload(state, page, userId, iconUrl) {
     const embed = new EmbedBuilder()
       .setColor(ICON_COLORS.queue)
       .setAuthor({
-        name: "Queue",
+        name: t(state.guildId, "queue_title"),
         iconURL: iconUrl || `attachment://${ICONS.queue}`
       })
-      .setDescription("Queue is empty.");
+      .setDescription(t(state.guildId, "queue_empty_desc"));
     return {
       embeds: [embed],
       files: iconUrl ? [] : (iconPath("queue") ? [{ attachment: iconPath("queue"), name: ICONS.queue }] : []),
@@ -206,17 +577,17 @@ function buildQueuePayload(state, page, userId, iconUrl) {
   const embed = new EmbedBuilder()
     .setColor(ICON_COLORS.queue)
     .setAuthor({
-      name: `Queue — Page ${clampedPage}/${totalPages}`,
+      name: t(state.guildId, "queue_page_title", { page: clampedPage, total: totalPages }),
       iconURL: iconUrl || `attachment://${ICONS.queue}`
     })
     .setDescription(`\`\`\`\n${padded.join("\n")}\n\`\`\``)
     .addFields(
-      { name: "Total in Queue", value: String(total), inline: true },
-      { name: "Total Duration", value: formatDuration(sumQueueDuration(state.queue)), inline: true }
+      { name: t(state.guildId, "queue_total_label"), value: String(total), inline: true },
+      { name: t(state.guildId, "queue_duration_label"), value: formatDuration(sumQueueDuration(state.queue)), inline: true }
     );
   if (state.now) {
     embed.addFields({
-      name: "Now Playing",
+      name: t(state.guildId, "now_playing_label"),
       value: `[${state.now.info.title}](${state.now.info.uri})`
     });
   }
@@ -342,6 +713,7 @@ async function waitForLavalink() {
 function getState(guildId) {
   if (!queues.has(guildId)) {
     queues.set(guildId, {
+      guildId,
       player: null,
       queue: [],
       now: null,
@@ -400,7 +772,7 @@ function sumQueueDuration(tracks) {
 }
 
 function trackTitle(track) {
-  const title = track.info?.title || "Unknown title";
+  const title = track.info?.title || t(null, "unknown_title");
   const author = track.info?.author ? ` — ${track.info.author}` : "";
   return `${title}${author}`;
 }
@@ -415,7 +787,7 @@ function isPlayerConnected(player) {
   return true;
 }
 
-function buildTrackEmbed(track, title, icon, context) {
+function buildTrackEmbed(track, title, icon, context, guildId) {
   const info = track.info || {};
   const embed = new EmbedBuilder()
     .setColor(ICON_COLORS.nowplaying)
@@ -423,11 +795,11 @@ function buildTrackEmbed(track, title, icon, context) {
       name: title,
       iconURL: `attachment://${ICONS[icon]}`
     })
-    .setTitle(info.title || "Unknown title")
+    .setTitle(info.title || t(guildId, "unknown_title"))
     .setURL(info.uri || null)
     .addFields(
-      { name: "Artist", value: info.author || "Unknown", inline: true },
-      { name: "Duration", value: formatDuration(info.length), inline: true }
+      { name: t(guildId, "artist_label"), value: info.author || t(guildId, "unknown_artist"), inline: true },
+      { name: t(guildId, "duration_label"), value: formatDuration(info.length), inline: true }
     );
   if (context) {
     embed.setDescription(context);
@@ -618,7 +990,7 @@ function normalizeLoadResult(res) {
 
 async function replyError(interaction, message) {
   const payload = buildEmbedMessage({
-    title: "Error",
+    title: t(interaction.guild.id, "error_title"),
     description: message,
     icon: "error"
   });
@@ -631,7 +1003,7 @@ async function replyError(interaction, message) {
 
 async function replyWarn(interaction, message) {
   const payload = buildEmbedMessage({
-    title: "Warning",
+    title: t(interaction.guild.id, "warning_title"),
     description: message,
     icon: "warning"
   });
@@ -650,18 +1022,18 @@ async function requireSameVoiceChannel(interaction) {
 
   if (botChannel) {
     if (!userChannel) {
-      await replyWarn(interaction, "Join voice channel to use commands.");
+      await replyWarn(interaction, t(interaction.guild.id, "err_join_voice_control"));
       return false;
     }
     if (userChannel.id !== botChannel.id) {
-      await replyWarn(interaction, `Join <#${botChannel.id}> to control playback.`);
+      await replyWarn(interaction, t(interaction.guild.id, "err_join_specific", { channelId: botChannel.id }));
       return false;
     }
     return true;
   }
 
   if (!userChannel) {
-    await replyWarn(interaction, "Join a voice channel to use music commands.");
+    await replyWarn(interaction, t(interaction.guild.id, "err_join_voice_commands"));
     return false;
   }
   return true;
@@ -764,13 +1136,32 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
   if (!interaction.isChatInputCommand()) return;
 
-  const allowed = await requireSameVoiceChannel(interaction);
-  if (!allowed) return;
+  const isLanguageCommand = interaction.commandName === "language";
+  if (!isLanguageCommand) {
+    const allowed = await requireSameVoiceChannel(interaction);
+    if (!allowed) return;
+  }
 
   const state = getState(interaction.guild.id);
 
   try {
     switch (interaction.commandName) {
+      case "language": {
+        const lang = interaction.options.getString("value", true);
+        if (!LANGUAGE_NAMES[lang]) {
+          await replyWarn(interaction, t(interaction.guild.id, "error_generic"));
+          return;
+        }
+        setGuildLanguage(interaction.guild.id, lang);
+        await interaction.reply(
+          buildEmbedMessage({
+            title: t(interaction.guild.id, "language_set_title"),
+            description: t(interaction.guild.id, "language_set_desc", { language: LANGUAGE_NAMES[lang] }),
+            icon: "queue"
+          })
+        );
+        return;
+      }
       case "play": {
         await interaction.deferReply();
         await ensurePlayer(interaction, state);
@@ -779,8 +1170,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
         if (overloadReason) {
           await interaction.editReply(
             buildEmbedMessage({
-              title: "Busy",
-              description: "I'm a bit busy right now. Please try again in a minute.",
+              title: t(interaction.guild.id, "busy_title"),
+              description: t(interaction.guild.id, "busy_desc"),
               icon: "warning"
             })
           );
@@ -795,8 +1186,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
         if (loadType === "LOAD_FAILED") {
           await interaction.editReply(
             buildEmbedMessage({
-              title: "Load failed",
-              description: "I couldn't load that track. The provider might be blocked or unavailable.",
+              title: t(interaction.guild.id, "load_failed_title"),
+              description: t(interaction.guild.id, "load_failed_desc"),
               icon: "warning"
             })
           );
@@ -805,8 +1196,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
         if (loadType === "NO_MATCHES") {
           await interaction.editReply(
             buildEmbedMessage({
-              title: "No matches",
-              description: "No matches found. Try another link or search.",
+              title: t(interaction.guild.id, "no_matches_title"),
+              description: t(interaction.guild.id, "no_matches_desc"),
               icon: "warning"
             })
           );
@@ -816,8 +1207,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
         if (!result || result.tracks.length === 0) {
           await interaction.editReply(
             buildEmbedMessage({
-              title: "No matches",
-              description: "No matches found. Try another link or search.",
+              title: t(interaction.guild.id, "no_matches_title"),
+              description: t(interaction.guild.id, "no_matches_desc"),
               icon: "warning"
             })
           );
@@ -834,18 +1225,24 @@ client.on(Events.InteractionCreate, async (interaction) => {
           state.queue.push(...result.tracks);
           await interaction.editReply(
             buildEmbedMessage({
-              title: "Queued playlist",
-              description: `${result.playlistInfo?.name || "Unknown"} (${result.tracks.length} tracks)`,
+              title: t(interaction.guild.id, "queued_playlist_title"),
+              description: t(interaction.guild.id, "queued_playlist_desc", {
+                name: result.playlistInfo?.name || t(interaction.guild.id, "unknown_title"),
+                count: result.tracks.length
+              }),
               icon: "queue"
             })
           );
           const first = result.tracks[0];
-          const context = `From: ${result.playlistInfo?.name || "Unknown"} • ${result.tracks.length} tracks`;
-          await interaction.followUp(buildTrackEmbed(first, "Now Playing", "nowplaying", context));
+          const context = t(interaction.guild.id, "from_playlist_context", {
+            name: result.playlistInfo?.name || t(interaction.guild.id, "unknown_title"),
+            count: result.tracks.length
+          });
+          await interaction.followUp(buildTrackEmbed(first, t(interaction.guild.id, "now_playing_title"), "nowplaying", context, interaction.guild.id));
         } else {
           const track = result.tracks[0];
           state.queue.push(track);
-          await interaction.editReply(buildTrackEmbed(track, "Now Playing", "nowplaying"));
+          await interaction.editReply(buildTrackEmbed(track, t(interaction.guild.id, "now_playing_title"), "nowplaying", null, interaction.guild.id));
         }
 
         await playNext(interaction.guild.id);
@@ -853,68 +1250,68 @@ client.on(Events.InteractionCreate, async (interaction) => {
       }
       case "skip": {
         if (!state.player || !state.now) {
-          await replyWarn(interaction, "Nothing is playing right now.");
+          await replyWarn(interaction, t(interaction.guild.id, "warn_nothing_playing"));
           return;
         }
         const position = interaction.options.getInteger("position");
         let nextTrack = null;
         if (position !== null && position !== undefined) {
           if (position < 0) {
-            await replyWarn(interaction, "Position cannot be negative. Use 0 to skip the current track.");
+            await replyWarn(interaction, t(interaction.guild.id, "warn_negative_position"));
             return;
           }
           if (position === 0) {
             await state.player.stopTrack();
             nextTrack = state.queue[0] || null;
             await interaction.reply(buildEmbedMessage({
-              title: "Skipped",
-              description: "Skipped current track.",
+              title: t(interaction.guild.id, "skipped_title"),
+              description: t(interaction.guild.id, "skipped_current_desc"),
               icon: "skip"
             }));
             if (nextTrack) {
-              await interaction.followUp(buildTrackEmbed(nextTrack, "Now Playing", "nowplaying"));
+              await interaction.followUp(buildTrackEmbed(nextTrack, t(interaction.guild.id, "now_playing_title"), "nowplaying", null, interaction.guild.id));
             }
             return;
           }
           if (position < 1 || position > state.queue.length) {
-            await replyWarn(interaction, `Position out of range. Queue length is ${state.queue.length}.`);
+            await replyWarn(interaction, t(interaction.guild.id, "warn_position_out_of_range", { length: state.queue.length }));
             return;
           }
           state.queue.splice(0, position - 1);
           nextTrack = state.queue[0] || null;
           await state.player.stopTrack();
           await interaction.reply(buildEmbedMessage({
-            title: "Skipped",
-            description: `Skipped to position ${position}.`,
+            title: t(interaction.guild.id, "skipped_title"),
+            description: t(interaction.guild.id, "skipped_to_desc", { position }),
             icon: "skip"
           }));
           if (nextTrack) {
-            await interaction.followUp(buildTrackEmbed(nextTrack, "Now Playing", "nowplaying"));
+            await interaction.followUp(buildTrackEmbed(nextTrack, t(interaction.guild.id, "now_playing_title"), "nowplaying", null, interaction.guild.id));
           }
           return;
         }
         nextTrack = state.queue[0] || null;
         await state.player.stopTrack();
         await interaction.reply(buildEmbedMessage({
-          title: "Skipped",
-          description: "Skipped.",
+          title: t(interaction.guild.id, "skipped_title"),
+          description: t(interaction.guild.id, "skipped_desc"),
           icon: "skip"
         }));
         if (nextTrack) {
-          await interaction.followUp(buildTrackEmbed(nextTrack, "Now Playing", "nowplaying"));
+          await interaction.followUp(buildTrackEmbed(nextTrack, t(interaction.guild.id, "now_playing_title"), "nowplaying", null, interaction.guild.id));
         }
         return;
       }
       case "pause": {
         if (!state.player) {
-          await replyWarn(interaction, "Nothing is playing right now.");
+          await replyWarn(interaction, t(interaction.guild.id, "warn_nothing_playing"));
           return;
         }
         await state.player.setPaused(true);
         await interaction.reply(
           buildEmbedMessage({
-            title: "Paused",
-            description: "Playback paused.",
+            title: t(interaction.guild.id, "paused_title"),
+            description: t(interaction.guild.id, "paused_desc"),
             icon: "pause"
           })
         );
@@ -922,14 +1319,14 @@ client.on(Events.InteractionCreate, async (interaction) => {
       }
       case "resume": {
         if (!state.player) {
-          await replyWarn(interaction, "Nothing is playing right now.");
+          await replyWarn(interaction, t(interaction.guild.id, "warn_nothing_playing"));
           return;
         }
         await state.player.setPaused(false);
         await interaction.reply(
           buildEmbedMessage({
-            title: "Resumed",
-            description: "Playback resumed.",
+            title: t(interaction.guild.id, "resumed_title"),
+            description: t(interaction.guild.id, "resumed_desc"),
             icon: "resume"
           })
         );
@@ -937,16 +1334,16 @@ client.on(Events.InteractionCreate, async (interaction) => {
       }
       case "nowplaying": {
         if (!state.now) {
-          await replyWarn(interaction, "Nothing is playing right now.");
+          await replyWarn(interaction, t(interaction.guild.id, "warn_nothing_playing"));
           return;
         }
         const track = state.now;
-        await interaction.reply(buildTrackEmbed(track, "Now Playing", "nowplaying"));
+        await interaction.reply(buildTrackEmbed(track, t(interaction.guild.id, "now_playing_title"), "nowplaying", null, interaction.guild.id));
         return;
       }
       case "queue": {
         if (state.queue.length === 0) {
-          await replyWarn(interaction, "Queue is empty.");
+          await replyWarn(interaction, t(interaction.guild.id, "queue_empty_warn"));
           return;
         }
         const payload = buildQueuePayload(state, 1, interaction.user.id);
@@ -961,7 +1358,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       }
       case "shuffle": {
         if (state.queue.length < 2) {
-          await replyWarn(interaction, "Not enough tracks in the queue to shuffle.");
+          await replyWarn(interaction, t(interaction.guild.id, "queue_not_enough_shuffle"));
           return;
         }
         for (let i = state.queue.length - 1; i > 0; i -= 1) {
@@ -970,8 +1367,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
         }
         await interaction.reply(
           buildEmbedMessage({
-            title: "Shuffled",
-            description: "Queue shuffled.",
+            title: t(interaction.guild.id, "shuffled_title"),
+            description: t(interaction.guild.id, "shuffled_desc"),
             icon: "shuffle"
           })
         );
@@ -980,14 +1377,14 @@ client.on(Events.InteractionCreate, async (interaction) => {
       }
       case "clear": {
         if (state.queue.length === 0) {
-          await replyWarn(interaction, "Queue is already empty.");
+          await replyWarn(interaction, t(interaction.guild.id, "queue_already_empty"));
           return;
         }
         state.queue = [];
         await interaction.reply(
           buildEmbedMessage({
-            title: "Queue cleared",
-            description: "All queued tracks removed.",
+            title: t(interaction.guild.id, "queue_cleared_title"),
+            description: t(interaction.guild.id, "queue_cleared_desc"),
             icon: "queue"
           })
         );
@@ -1008,8 +1405,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
         }
         await interaction.reply(
           buildEmbedMessage({
-            title: "Disconnected",
-            description: "Gracefully leaving...",
+            title: t(interaction.guild.id, "disconnected_title"),
+            description: t(interaction.guild.id, "disconnected_desc"),
             icon: "leave"
           })
         );
@@ -1017,11 +1414,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
         return;
       }
       default:
-        await replyWarn(interaction, "Unknown command.");
+        await replyWarn(interaction, t(interaction.guild.id, "unknown_command"));
     }
   } catch (err) {
     console.error(err);
-    const message = toUserMessage(err);
+    const message = toUserMessage(err, interaction.guild.id);
     await replyError(interaction, message);
   }
 });

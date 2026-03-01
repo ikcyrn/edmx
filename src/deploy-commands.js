@@ -27,6 +27,22 @@ const commands = [
   new SlashCommandBuilder().setName("shuffle").setDescription("Shuffle the queue"),
   new SlashCommandBuilder().setName("clear").setDescription("Clear the queue"),
   new SlashCommandBuilder().setName("leave").setDescription("Disconnect the bot"),
+  new SlashCommandBuilder()
+    .setName("language")
+    .setDescription("Set the bot language for this server")
+    .addStringOption((opt) =>
+      opt
+        .setName("value")
+        .setDescription("Choose a language")
+        .setRequired(true)
+        .addChoices(
+          { name: "English", value: "en" },
+          { name: "简体中文", value: "zh-CN" },
+          { name: "繁體中文", value: "zh-TW" },
+          { name: "日本語", value: "ja" },
+          { name: "한국어", value: "ko" }
+        )
+    ),
 ].map((c) => c.toJSON());
 
 const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
