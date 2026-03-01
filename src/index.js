@@ -865,17 +865,19 @@ async function ensurePlayer(interaction, state) {
       }
       state.player = null;
     }
-    const currentChannelId = state.player.connection?.channelId;
-    if (currentChannelId && currentChannelId !== voiceChannel.id) {
-      throw new Error(`I'm already playing in <#${currentChannelId}>. Join me there or use /leave first.`);
-    }
-    if (!currentChannelId || currentChannelId !== voiceChannel.id) {
-      try {
-        await state.player.destroy();
-      } catch (err) {
-        console.error("Error destroying stale player", err);
+    if (state.player) {
+      const currentChannelId = state.player.connection?.channelId;
+      if (currentChannelId && currentChannelId !== voiceChannel.id) {
+        throw new Error(`I'm already playing in <#${currentChannelId}>. Join me there or use /leave first.`);
       }
-      state.player = null;
+      if (!currentChannelId || currentChannelId !== voiceChannel.id) {
+        try {
+          await state.player.destroy();
+        } catch (err) {
+          console.error("Error destroying stale player", err);
+        }
+        state.player = null;
+      }
     }
   }
 
