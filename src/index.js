@@ -395,13 +395,6 @@ async function ensurePlayer(interaction, state) {
   }
   await waitForNodeReady();
   const me = interaction.guild.members.me || (await interaction.guild.members.fetchMe());
-  if (shoukaku.connections.has(interaction.guild.id)) {
-    try {
-      shoukaku.leaveVoiceChannel(interaction.guild.id);
-    } catch (err) {
-      console.error("Error leaving stale voice connection", err);
-    }
-  }
   const member = await interaction.guild.members.fetch(interaction.user.id);
   const voiceChannel = member.voice.channel;
   if (!voiceChannel) {
@@ -416,6 +409,15 @@ async function ensurePlayer(interaction, state) {
   }
   if (!perms?.has("Speak")) {
     throw new Error("I need permission to speak in that voice channel.");
+  }
+
+  const existingConnection = shoukaku.connections.get(interaction.guild.id);
+  if (existingConnection && existingConnection.channelId && existingConnection.channelId !== voiceChannel.id) {
+    try {
+      shoukaku.leaveVoiceChannel(interaction.guild.id);
+    } catch (err) {
+      console.error("Error leaving stale voice connection", err);
+    }
   }
 
   if (state.player) {
@@ -434,12 +436,32 @@ async function ensurePlayer(interaction, state) {
   }
 
   if (!state.player) {
-    state.player = await shoukaku.joinVoiceChannel({
-      guildId: interaction.guild.id,
-      channelId: voiceChannel.id,
-      shardId: interaction.guild.shardId,
-      deaf: true
-    });
+    try {
+      state.player = await shoukaku.joinVoiceChannel({
+        guildId: interaction.guild.id,
+        channelId: voiceChannel.id,
+        shardId: interaction.guild.shardId,
+        deaf: true
+      });
+    } catch (err) {
+      const message = err?.message || "";
+      if (message.includes("voice connection") || message.includes("not established")) {
+        try {
+          shoukaku.leaveVoiceChannel(interaction.guild.id);
+        } catch (leaveErr) {
+          console.error("Error leaving failed voice connection", leaveErr);
+        }
+        await new Promise((r) => setTimeout(r, 2000));
+        state.player = await shoukaku.joinVoiceChannel({
+          guildId: interaction.guild.id,
+          channelId: voiceChannel.id,
+          shardId: interaction.guild.shardId,
+          deaf: true
+        });
+      } else {
+        throw err;
+      }
+    }
 
     state.player.on("end", () => {
       state.playing = false;
