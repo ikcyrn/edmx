@@ -20,7 +20,9 @@ const nodes = [
   {
     name: "main",
     url: `${process.env.LAVALINK_HOST || "localhost"}:${process.env.LAVALINK_PORT || "2333"}`,
-    auth: process.env.LAVALINK_PASSWORD || "youshallnotpass"
+    auth: process.env.LAVALINK_PASSWORD || "youshallnotpass",
+    secure: false,
+    version: "v4"
   }
 ];
 
