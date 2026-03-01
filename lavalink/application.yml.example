@@ -31,13 +31,14 @@ plugins:
   youtube:
     enabled: true
     allowSearch: true
+    cookies: "/opt/cookies.txt"
   # LavaSrc plugin config (Spotify/YouTube Music resolvers).
   # Lavalink will auto-download the plugin above on startup.
   lavasrc:
     sources:
       spotify: true
       youtube: true
-      ytdlp: true
+      ytdlp: false
     spotify:
       clientId: "your_spotify_client_id"
       clientSecret: "your_spotify_client_secret"
