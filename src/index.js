@@ -64,6 +64,8 @@ const ICON_COLORS = {
 
 const OVERLOAD_CPU_THRESHOLD = 0.9;
 const OVERLOAD_MEM_FREE_MB = 256;
+const EARLY_END_TOLERANCE = 0.99;
+const EARLY_END_MIN_MS = 10000;
 
 const LANGUAGE_FILE = path.join(__dirname, "..", "data", "language.json");
 const LANGUAGE_NAMES = {
@@ -531,6 +533,53 @@ function getNodeOverloadReason() {
   return null;
 }
 
+function trackKey(track) {
+  return (
+    track?.info?.identifier ||
+    track?.info?.uri ||
+    `${track?.info?.title || ""}|${track?.info?.author || ""}|${track?.info?.length || 0}`
+  );
+}
+
+async function tryEarlyEndFallback(state, guildId) {
+  const track = state.now;
+  if (!track || track?.info?.sourceName !== "spotify") return false;
+  const expected = track?.info?.length || 0;
+  if (!expected || expected < EARLY_END_MIN_MS) return false;
+  if (!state.startedAt) return false;
+  const playedMs = Date.now() - state.startedAt;
+  if (playedMs < EARLY_END_MIN_MS) return false;
+  if (playedMs >= expected * EARLY_END_TOLERANCE) return false;
+
+  const key = trackKey(track);
+  const retries = state.retryCounts[key] || 0;
+  if (retries >= 1) return false;
+  state.retryCounts[key] = retries + 1;
+
+  const title = track?.info?.title || "";
+  const author = track?.info?.author || "";
+  const query = `${title} ${author}`.trim();
+  if (!query) return false;
+
+  const node = shoukaku.nodes.get("main");
+  if (!node) return false;
+
+  try {
+    const res = await node.rest.resolve(`scsearch:${query}`);
+    const result = normalizeLoadResult(res);
+    const next = result.tracks?.[0];
+    if (!next) return false;
+    state.queue.unshift(next);
+    state.playing = false;
+    state.now = null;
+    await playNext(guildId, true);
+    return true;
+  } catch (err) {
+    console.error("Early-end fallback failed", err);
+    return false;
+  }
+}
+
 const QUEUE_PAGE_SIZE = 10;
 const QUEUE_LINE_WIDTH = 36;
 
@@ -734,6 +783,8 @@ function getState(guildId) {
       loop: "off",
       playing: false,
       volume: 100,
+      startedAt: null,
+      retryCounts: {},
       idleTimer: null,
       queueMessageId: null,
       queueChannelId: null,
@@ -946,13 +997,17 @@ async function ensurePlayer(interaction, state) {
       if (reason && String(reason).toUpperCase() === "REPLACED") {
         return;
       }
-      if (state.loop === "track" && state.now) {
-        state.queue.unshift(state.now);
-      } else if (state.loop === "queue" && state.now) {
-        state.queue.push(state.now);
-      }
-      state.now = null;
-      void playNext(interaction.guild.id, true);
+      void (async () => {
+        const recovered = await tryEarlyEndFallback(state, interaction.guild.id);
+        if (recovered) return;
+        if (state.loop === "track" && state.now) {
+          state.queue.unshift(state.now);
+        } else if (state.loop === "queue" && state.now) {
+          state.queue.push(state.now);
+        }
+        state.now = null;
+        await playNext(interaction.guild.id, true);
+      })();
     });
 
     state.player.on("stuck", () => {
@@ -1090,6 +1145,7 @@ async function playNext(guildId, force = false) {
 
   state.now = next;
   state.playing = true;
+  state.startedAt = Date.now();
   if (state.idleTimer) {
     clearTimeout(state.idleTimer);
     state.idleTimer = null;
