@@ -589,7 +589,8 @@ async function findNonPreviewSoundCloud(track) {
 
 async function tryEarlyEndFallback(state, guildId) {
   const track = state.now;
-  if (!track || track?.info?.sourceName !== "spotify") return false;
+  const sourceName = track?.info?.sourceName;
+  if (!track || (sourceName !== "spotify" && sourceName !== "soundcloud")) return false;
   const expected = track?.info?.length || 0;
   if (!expected || expected < EARLY_END_MIN_MS) return false;
   if (!state.startedAt) return false;
@@ -599,7 +600,7 @@ async function tryEarlyEndFallback(state, guildId) {
 
   const key = trackKey(track);
   const retries = state.retryCounts[key] || 0;
-  if (retries >= 1) return false;
+  if (retries >= 2) return false;
   state.retryCounts[key] = retries + 1;
 
   const title = track?.info?.title || "";
@@ -613,8 +614,11 @@ async function tryEarlyEndFallback(state, guildId) {
   try {
     const res = await node.rest.resolve(`scsearch:${query}`);
     const result = normalizeLoadResult(res);
-    const next = result.tracks?.find((t) => !isPreviewSoundCloud(t)) || result.tracks?.[0];
+    const seen = state.retrySeen[key] || new Set();
+    const next = result.tracks?.find((t) => !isPreviewSoundCloud(t) && !seen.has(t.info?.identifier));
     if (!next) return false;
+    seen.add(next.info?.identifier);
+    state.retrySeen[key] = seen;
     state.queue.unshift(next);
     state.playing = false;
     state.now = null;
@@ -831,6 +835,7 @@ function getState(guildId) {
       volume: 100,
       startedAt: null,
       retryCounts: {},
+      retrySeen: {},
       idleTimer: null,
       queueMessageId: null,
       queueChannelId: null,
