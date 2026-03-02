@@ -6,20 +6,31 @@ module.exports = async function handleStop(ctx) {
     replyWarn,
     buildEmbedMessage,
     stopCurrentForTransition,
+    clearQueueFinishTimer,
     updateQueueMessage,
     updateNowPlayingMessage
   } = ctx;
 
+  const hasPlayer = Boolean(state.player);
   const hasCurrent = Boolean(state.now || state.player?.track);
   const hadQueue = state.queue.length > 0;
-  if (!hasCurrent && !hadQueue) {
+  if (!hasPlayer && !hasCurrent && !hadQueue) {
     await replyWarn(interaction, t(interaction.guild.id, "warn_nothing_playing"));
     return;
   }
 
-  if (hasCurrent) {
-    await stopCurrentForTransition(state, "Failed to stop current track for stop command");
+  if (hasPlayer) {
+    const stopped = await stopCurrentForTransition(state, "Failed to stop current track for stop command");
+    if (!stopped && state.player) {
+      try {
+        await state.player.destroy();
+      } catch (err) {
+        console.error("Failed to destroy player during stop command", err);
+      }
+      state.player = null;
+    }
   }
+  clearQueueFinishTimer(state);
   state.queue = [];
   state.now = null;
   state.nowDisplay = null;
