@@ -1457,7 +1457,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
             await interaction.editReply(buildTrackEmbed(track, t(interaction.guild.id, "now_playing_title"), "nowplaying", null, interaction.guild.id));
           }
         }
-        if (!isPlaying && !state.player?.track) {
+        if (!isPlaying) {
           await playNext(interaction.guild.id, true);
         } else {
           await updateQueueMessage(interaction.guild.id);
