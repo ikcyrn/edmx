@@ -937,8 +937,12 @@ async function ensurePlayer(interaction, state) {
       }
     }
 
-    state.player.on("end", () => {
+    state.player.on("end", (data) => {
       state.playing = false;
+      const reason = data?.reason || data?.reason?.toString?.() || data?.reason;
+      if (reason && String(reason).toUpperCase() === "REPLACED") {
+        return;
+      }
       if (state.loop === "track" && state.now) {
         state.queue.unshift(state.now);
       } else if (state.loop === "queue" && state.now) {
@@ -1058,6 +1062,7 @@ async function requireSameVoiceChannel(interaction) {
 async function playNext(guildId) {
   const state = queues.get(guildId);
   if (!state || !state.player || state.playing) return;
+  if (state.player?.track) return;
 
   const next = state.queue.shift();
   if (!next) {
