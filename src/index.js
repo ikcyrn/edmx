@@ -1577,6 +1577,16 @@ client.on(Events.InteractionCreate, async (interaction) => {
           }
         }
         if (!isPlaying) {
+          // Recover from desynced Lavalink state (e.g. after skip-at-end) before starting a new track.
+          if (state.player?.track) {
+            state.suppressStopEvents += 1;
+            try {
+              await state.player.stopTrack();
+            } catch (err) {
+              state.suppressStopEvents = Math.max(0, state.suppressStopEvents - 1);
+              console.error("Failed to stop stale track before starting new playback", err);
+            }
+          }
           state.playing = false;
           state.now = null;
           await playNext(interaction.guild.id, true);
