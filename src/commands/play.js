@@ -75,7 +75,7 @@ module.exports = async function handlePlay(ctx) {
     result.loadType === "playlist_loaded" ||
     Boolean(result.playlistInfo?.name);
 
-  const isPlaying = Boolean(state.now);
+  const isPlaying = Boolean(state.now && state.playing && state.player?.track);
   clearQueueFinishTimer(state);
 
   if (isCollection && result.tracks.length > 1) {
@@ -122,7 +122,16 @@ module.exports = async function handlePlay(ctx) {
 
   if (!isPlaying) {
     if (state.player?.track) {
-      await stopCurrentForTransition(state, "Failed to stop stale track before starting new playback");
+      const stopped = await stopCurrentForTransition(state, "Failed to stop stale track before starting new playback");
+      if (!stopped && state.player) {
+        try {
+          await state.player.destroy();
+        } catch (err) {
+          console.error("Failed to destroy stale player before restarting playback", err);
+        }
+        state.player = null;
+        await ensurePlayer(interaction, state);
+      }
     }
     state.playing = false;
     state.now = null;
@@ -131,4 +140,3 @@ module.exports = async function handlePlay(ctx) {
     await updateQueueMessage(interaction.guild.id);
   }
 };
-
