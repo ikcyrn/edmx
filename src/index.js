@@ -1462,6 +1462,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
           }
         }
         if (!isPlaying) {
+          state.playing = false;
+          state.now = null;
           await playNext(interaction.guild.id, true);
         } else {
           await updateQueueMessage(interaction.guild.id);
