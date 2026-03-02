@@ -7,5 +7,7 @@ module.exports = async function handleNowPlaying(ctx) {
   await interaction.reply(
     buildTrackEmbed(state.now, t(interaction.guild.id, "now_playing_title"), "nowplaying", null, interaction.guild.id)
   );
+  const message = await interaction.fetchReply();
+  state.nowPlayingMessageId = message.id;
+  state.nowPlayingChannelId = interaction.channelId;
 };
-

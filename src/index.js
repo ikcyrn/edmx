@@ -926,6 +926,8 @@ function getState(guildId) {
       queueIconUrl: null,
       queuePage: 1,
       queueFinishTimer: null,
+      nowPlayingMessageId: null,
+      nowPlayingChannelId: null,
       suppressStopEvents: 0
     });
   }
@@ -941,6 +943,8 @@ function resetState(state) {
   state.queue = [];
   state.now = null;
   state.playing = false;
+  state.nowPlayingMessageId = null;
+  state.nowPlayingChannelId = null;
   state.suppressStopEvents = 0;
   clearQueueFinishTimer(state);
 }
@@ -956,6 +960,26 @@ async function updateQueueMessage(guildId) {
     await message.edit(payload);
   } catch (err) {
     console.error("Failed to update queue message", err);
+  }
+}
+
+async function updateNowPlayingMessage(guildId) {
+  const state = getState(guildId);
+  if (!state.nowPlayingMessageId || !state.nowPlayingChannelId) return;
+  try {
+    const channel = await client.channels.fetch(state.nowPlayingChannelId);
+    if (!channel || !channel.isTextBased()) return;
+    const message = await channel.messages.fetch(state.nowPlayingMessageId);
+    const payload = state.now
+      ? buildTrackEmbed(state.now, t(guildId, "now_playing_title"), "nowplaying", null, guildId)
+      : buildEmbedMessage({
+          title: t(guildId, "warning_title"),
+          description: t(guildId, "warn_nothing_playing"),
+          icon: "warning"
+        });
+    await message.edit(payload);
+  } catch (err) {
+    console.error("Failed to update now playing message", err);
   }
 }
 
@@ -1341,6 +1365,7 @@ async function playNext(guildId, force = false) {
     state.now = null;
     state.playing = false;
     await updateQueueMessage(guildId);
+    await updateNowPlayingMessage(guildId);
     scheduleQueueFinish(state);
     if (state.player && !state.idleTimer) {
       state.idleTimer = setTimeout(async () => {
@@ -1409,6 +1434,7 @@ async function playNext(guildId, force = false) {
   }
   state.queue.shift();
   await updateQueueMessage(guildId);
+  await updateNowPlayingMessage(guildId);
 }
 
 client.once(Events.ClientReady, async () => {
@@ -1500,7 +1526,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
       clearQueueFinishTimer,
       stopCurrentForTransition,
       playNext,
-      updateQueueMessage
+      updateQueueMessage,
+      updateNowPlayingMessage
     });
   } catch (err) {
     console.error(err);

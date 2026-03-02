@@ -1,5 +1,5 @@
 module.exports = async function handleLeave(ctx) {
-  const { interaction, state, t, shoukaku, buildEmbedMessage, updateQueueMessage } = ctx;
+  const { interaction, state, t, shoukaku, buildEmbedMessage, updateQueueMessage, updateNowPlayingMessage } = ctx;
   if (state.player) {
     await state.player.destroy();
     state.player = null;
@@ -20,5 +20,5 @@ module.exports = async function handleLeave(ctx) {
     })
   );
   await updateQueueMessage(interaction.guild.id);
+  await updateNowPlayingMessage(interaction.guild.id);
 };
-
