@@ -1211,6 +1211,7 @@ async function playNext(guildId, force = false) {
   const next = state.queue.shift();
   if (!next) {
     state.now = null;
+    state.playing = false;
     await updateQueueMessage(guildId);
     await notifyQueueFinished(state);
     if (state.player && !state.idleTimer) {
@@ -1417,7 +1418,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
           result.loadType === "playlist_loaded" ||
           Boolean(result.playlistInfo?.name);
 
-        const isPlaying = Boolean(state.now || state.playing || state.player?.track);
+        const isPlaying = Boolean(state.now || state.playing);
 
         if (isCollection && result.tracks.length > 1) {
           state.queue.push(...result.tracks);
