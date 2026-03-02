@@ -1297,22 +1297,23 @@ client.on(Events.InteractionCreate, async (interaction) => {
           return;
         }
         const position = interaction.options.getInteger("position");
-        let nextTrack = null;
         if (position !== null && position !== undefined) {
           if (position < 0) {
             await replyWarn(interaction, t(interaction.guild.id, "warn_negative_position"));
             return;
           }
           if (position === 0) {
+            state.playing = false;
+            state.now = null;
             await state.player.stopTrack();
-            nextTrack = state.queue[0] || null;
             await interaction.reply(buildEmbedMessage({
               title: t(interaction.guild.id, "skipped_title"),
               description: t(interaction.guild.id, "skipped_current_desc"),
               icon: "skip"
             }));
-            if (nextTrack) {
-              await interaction.followUp(buildTrackEmbed(nextTrack, t(interaction.guild.id, "now_playing_title"), "nowplaying", null, interaction.guild.id));
+            await playNext(interaction.guild.id);
+            if (state.now) {
+              await interaction.followUp(buildTrackEmbed(state.now, t(interaction.guild.id, "now_playing_title"), "nowplaying", null, interaction.guild.id));
             }
             return;
           }
@@ -1321,27 +1322,31 @@ client.on(Events.InteractionCreate, async (interaction) => {
             return;
           }
           state.queue.splice(0, position - 1);
-          nextTrack = state.queue[0] || null;
+          state.playing = false;
+          state.now = null;
           await state.player.stopTrack();
           await interaction.reply(buildEmbedMessage({
             title: t(interaction.guild.id, "skipped_title"),
             description: t(interaction.guild.id, "skipped_to_desc", { position }),
             icon: "skip"
           }));
-          if (nextTrack) {
-            await interaction.followUp(buildTrackEmbed(nextTrack, t(interaction.guild.id, "now_playing_title"), "nowplaying", null, interaction.guild.id));
+          await playNext(interaction.guild.id);
+          if (state.now) {
+            await interaction.followUp(buildTrackEmbed(state.now, t(interaction.guild.id, "now_playing_title"), "nowplaying", null, interaction.guild.id));
           }
           return;
         }
-        nextTrack = state.queue[0] || null;
+        state.playing = false;
+        state.now = null;
         await state.player.stopTrack();
         await interaction.reply(buildEmbedMessage({
           title: t(interaction.guild.id, "skipped_title"),
           description: t(interaction.guild.id, "skipped_desc"),
           icon: "skip"
         }));
-        if (nextTrack) {
-          await interaction.followUp(buildTrackEmbed(nextTrack, t(interaction.guild.id, "now_playing_title"), "nowplaying", null, interaction.guild.id));
+        await playNext(interaction.guild.id);
+        if (state.now) {
+          await interaction.followUp(buildTrackEmbed(state.now, t(interaction.guild.id, "now_playing_title"), "nowplaying", null, interaction.guild.id));
         }
         return;
       }
