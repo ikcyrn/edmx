@@ -38,4 +38,5 @@ plugins:
       clientSecret: "your_spotify_client_secret"
       countryCode: "US"
     providers:
+      - "scsearch:\"%ISRC%\""
       - "scsearch:%QUERY%"
