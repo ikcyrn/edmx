@@ -1422,7 +1422,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
           result.loadType === "playlist_loaded" ||
           Boolean(result.playlistInfo?.name);
 
-        const isPlaying = Boolean(state.now || state.playing);
+        const isPlaying = Boolean(state.now && state.playing);
 
         if (isCollection && result.tracks.length > 1) {
           state.queue.push(...result.tracks);
