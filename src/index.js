@@ -597,8 +597,8 @@ async function findNonPreviewSoundCloud(track) {
   }
 }
 
-async function tryEarlyEndFallback(state, guildId) {
-  const track = state.now;
+async function tryEarlyEndFallback(state, guildId, trackArg) {
+  const track = trackArg || state.now;
   const sourceName = track?.info?.sourceName;
   if (!track || (sourceName !== "spotify" && sourceName !== "soundcloud")) return false;
   const expected = track?.info?.length || 0;
@@ -1077,21 +1077,23 @@ async function ensurePlayer(interaction, state) {
     state.player.on("end", (data) => {
       state.playing = false;
       const reason = data?.reason || data?.reason?.toString?.() || data?.reason;
+      const endedTrack = state.now;
+      state.now = null;
       if (reason && String(reason).toUpperCase() === "REPLACED") {
+        logTrackDebug("end", endedTrack, { reason });
         return;
       }
       const endedAt = Date.now();
       const playedMs = state.startedAt ? endedAt - state.startedAt : null;
-      logTrackDebug("end", state.now, { reason, playedMs });
+      logTrackDebug("end", endedTrack, { reason, playedMs });
       void (async () => {
-        const recovered = await tryEarlyEndFallback(state, interaction.guild.id);
+        const recovered = await tryEarlyEndFallback(state, interaction.guild.id, endedTrack);
         if (recovered) return;
-        if (state.loop === "track" && state.now) {
-          state.queue.unshift(state.now);
-        } else if (state.loop === "queue" && state.now) {
-          state.queue.push(state.now);
+        if (state.loop === "track" && endedTrack) {
+          state.queue.unshift(endedTrack);
+        } else if (state.loop === "queue" && endedTrack) {
+          state.queue.push(endedTrack);
         }
-        state.now = null;
         await playNext(interaction.guild.id, true);
       })();
     });
