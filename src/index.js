@@ -1205,7 +1205,8 @@ async function requireSameVoiceChannel(interaction) {
 
 async function playNext(guildId, force = false) {
   const state = queues.get(guildId);
-  if (!state || !state.player || state.playing) return;
+  if (!state || !state.player) return;
+  if (state.playing && state.now) return;
   if (!force && state.player?.track) return;
 
   const next = state.queue.shift();
