@@ -876,11 +876,11 @@ async function ensurePlayer(interaction, state) {
       state.player = null;
     }
     if (state.player) {
-      const currentChannelId = state.player.connection?.channelId;
+      const currentChannelId = state.player.connection?.channelId || existingConnection?.channelId;
       if (currentChannelId && currentChannelId !== voiceChannel.id) {
         throw new Error(`I'm already playing in <#${currentChannelId}>. Join me there or use /leave first.`);
       }
-      if (!currentChannelId || currentChannelId !== voiceChannel.id) {
+      if (!currentChannelId && !state.playing && !state.now) {
         try {
           await state.player.destroy();
         } catch (err) {
@@ -1276,7 +1276,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
             await interaction.editReply(buildTrackEmbed(track, t(interaction.guild.id, "now_playing_title"), "nowplaying", null, interaction.guild.id));
           }
         }
-        if (!isPlaying) {
+        if (!isPlaying && !state.player?.track) {
           await playNext(interaction.guild.id);
         } else {
           await updateQueueMessage(interaction.guild.id);
