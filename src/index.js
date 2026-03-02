@@ -853,7 +853,8 @@ function getState(guildId) {
       queueChannelId: null,
       queueIconUrl: null,
       queuePage: 1,
-      queueFinishTimer: null
+      queueFinishTimer: null,
+      suppressStopEvents: 0
     });
   }
   return queues.get(guildId);
@@ -868,6 +869,7 @@ function resetState(state) {
   state.queue = [];
   state.now = null;
   state.playing = false;
+  state.suppressStopEvents = 0;
   clearQueueFinishTimer(state);
 }
 
@@ -1094,11 +1096,17 @@ async function ensurePlayer(interaction, state) {
     }
 
     state.player.on("end", (data) => {
-      state.playing = false;
       const reason = data?.reason || data?.reason?.toString?.() || data?.reason;
+      const reasonUpper = String(reason || "").toUpperCase();
+      if (reasonUpper === "STOPPED" && state.suppressStopEvents > 0) {
+        state.suppressStopEvents -= 1;
+        logTrackDebug("end", state.now, { reason, suppressed: true });
+        return;
+      }
+      state.playing = false;
       const endedTrack = state.now;
       state.now = null;
-      if (reason && String(reason).toUpperCase() === "REPLACED") {
+      if (reasonUpper === "REPLACED") {
         logTrackDebug("end", endedTrack, { reason });
         return;
       }
@@ -1504,6 +1512,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
             return;
           }
           if (position === 0) {
+            state.suppressStopEvents += 1;
             state.playing = false;
             state.now = null;
             await state.player.stopTrack();
@@ -1523,6 +1532,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
             return;
           }
           state.queue.splice(0, position - 1);
+          state.suppressStopEvents += 1;
           state.playing = false;
           state.now = null;
           await state.player.stopTrack();
@@ -1537,6 +1547,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
           }
           return;
         }
+        state.suppressStopEvents += 1;
         state.playing = false;
         state.now = null;
         await state.player.stopTrack();
