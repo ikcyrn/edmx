@@ -17,6 +17,7 @@ module.exports = async function handleSkip(ctx) {
     if (position === 0) {
       state.playing = false;
       state.now = null;
+      state.nowDisplay = null;
       await stopCurrentForTransition(state, "Failed to stop current track for skip");
       await interaction.reply(
         buildEmbedMessage({
@@ -35,6 +36,7 @@ module.exports = async function handleSkip(ctx) {
     state.queue.splice(0, position - 1);
     state.playing = false;
     state.now = null;
+    state.nowDisplay = null;
     await stopCurrentForTransition(state, "Failed to stop current track for positional skip");
     await interaction.reply(
       buildEmbedMessage({
@@ -48,6 +50,7 @@ module.exports = async function handleSkip(ctx) {
   }
   state.playing = false;
   state.now = null;
+  state.nowDisplay = null;
   await stopCurrentForTransition(state, "Failed to stop current track for skip");
   await interaction.reply(
     buildEmbedMessage({

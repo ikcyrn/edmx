@@ -5,6 +5,7 @@ module.exports = async function handleLeave(ctx) {
     state.player = null;
     state.queue = [];
     state.now = null;
+    state.nowDisplay = null;
     state.playing = false;
   }
   try {

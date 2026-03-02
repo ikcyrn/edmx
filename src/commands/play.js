@@ -135,7 +135,8 @@ module.exports = async function handlePlay(ctx) {
     }
     state.playing = false;
     state.now = null;
-    await playNext(interaction.guild.id, true);
+    state.nowDisplay = null;
+    await playNext(interaction.guild.id, true, { announce: false });
     if (!state.now && state.queue.length > 0 && state.player) {
       try {
         await state.player.destroy();
@@ -144,7 +145,7 @@ module.exports = async function handlePlay(ctx) {
       }
       state.player = null;
       await ensurePlayer(interaction, state);
-      await playNext(interaction.guild.id, true);
+      await playNext(interaction.guild.id, true, { announce: false });
     }
   } else {
     await updateQueueMessage(interaction.guild.id);

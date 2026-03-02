@@ -797,10 +797,11 @@ function buildQueuePayload(state, page, userId, iconUrl) {
       { name: t(state.guildId, "queue_total_label"), value: String(total), inline: true },
       { name: t(state.guildId, "queue_duration_label"), value: formatDuration(sumQueueDuration(state.queue)), inline: true }
     );
-  if (state.now) {
+  const current = state.nowDisplay || state.now;
+  if (current) {
     embed.addFields({
       name: t(state.guildId, "now_playing_label"),
-      value: `[${state.now.info.title}](${state.now.info.uri})`
+      value: `[${current.info.title}](${current.info.uri})`
     });
   }
   const prevDisabled = clampedPage <= 1;
@@ -945,6 +946,7 @@ function getState(guildId) {
       queueFinishTimer: null,
       nowPlayingMessageId: null,
       nowPlayingChannelId: null,
+      nowDisplay: null,
       suppressStopEvents: 0
     });
   }
@@ -962,6 +964,7 @@ function resetState(state) {
   state.playing = false;
   state.nowPlayingMessageId = null;
   state.nowPlayingChannelId = null;
+  state.nowDisplay = null;
   state.suppressStopEvents = 0;
   clearQueueFinishTimer(state);
 }
@@ -987,8 +990,9 @@ async function updateNowPlayingMessage(guildId) {
     const channel = await client.channels.fetch(state.nowPlayingChannelId);
     if (!channel || !channel.isTextBased()) return;
     const message = await channel.messages.fetch(state.nowPlayingMessageId);
-    const payload = state.now
-      ? buildTrackEmbed(state.now, t(guildId, "now_playing_title"), "nowplaying", null, guildId)
+    const current = state.nowDisplay || state.now;
+    const payload = current
+      ? buildTrackEmbed(current, t(guildId, "now_playing_title"), "nowplaying", null, guildId)
       : buildEmbedMessage({
           title: t(guildId, "warning_title"),
           description: t(guildId, "warn_nothing_playing"),
@@ -1000,7 +1004,8 @@ async function updateNowPlayingMessage(guildId) {
   }
 }
 
-async function announceNowPlayingStart(state, track) {
+async function announceNowPlayingStart(state) {
+  const track = state?.nowDisplay || state?.now;
   if (!state || !track) return;
   const channelId = state.lastChannelId || state.queueChannelId || state.nowPlayingChannelId;
   if (!channelId) return;
@@ -1237,6 +1242,7 @@ async function ensurePlayer(interaction, state) {
       state.playing = false;
       const endedTrack = state.now;
       state.now = null;
+      state.nowDisplay = null;
       const endedAt = Date.now();
       const playedMs = state.startedAt ? endedAt - state.startedAt : null;
       logTrackDebug("end", endedTrack, { reason, playedMs });
@@ -1254,6 +1260,8 @@ async function ensurePlayer(interaction, state) {
 
     state.player.on("stuck", () => {
       state.playing = false;
+      state.now = null;
+      state.nowDisplay = null;
       void playNext(interaction.guild.id, true);
     });
 
@@ -1261,6 +1269,7 @@ async function ensurePlayer(interaction, state) {
       console.error("Player error", err);
       state.playing = false;
       state.now = null;
+      state.nowDisplay = null;
       void playNext(interaction.guild.id, true);
     });
 
@@ -1381,9 +1390,10 @@ async function requireSameVoiceChannel(interaction) {
   return true;
 }
 
-async function playNext(guildId, force = false) {
+async function playNext(guildId, force = false, options = {}) {
   const state = queues.get(guildId);
   if (!state || !state.player) return;
+  const { announce = true } = options;
   clearQueueFinishTimer(state);
   if (force && state.playing && !state.now) {
     state.playing = false;
@@ -1393,6 +1403,7 @@ async function playNext(guildId, force = false) {
   const next = state.queue[0];
   if (!next) {
     state.now = null;
+    state.nowDisplay = null;
     state.playing = false;
     await updateQueueMessage(guildId);
     await updateNowPlayingMessage(guildId);
@@ -1415,6 +1426,7 @@ async function playNext(guildId, force = false) {
   }
 
   let chosen = next;
+  let displayTrack = next;
   if (next?.info?.sourceName === "spotify") {
     const title = next?.info?.title || "";
     const author = next?.info?.author || "";
@@ -1427,6 +1439,19 @@ async function playNext(guildId, force = false) {
         const candidate = pickBestSoundCloudMirror(next, result.tracks, { allowPreview: false, minScore: 0.1 });
         if (candidate) {
           chosen = candidate;
+          displayTrack = {
+            ...candidate,
+            info: {
+              ...(candidate.info || {}),
+              title: next?.info?.title || candidate?.info?.title,
+              author: next?.info?.author || candidate?.info?.author,
+              length: next?.info?.length || candidate?.info?.length,
+              uri: next?.info?.uri || candidate?.info?.uri,
+              identifier: next?.info?.identifier || candidate?.info?.identifier,
+              sourceName: next?.info?.sourceName || candidate?.info?.sourceName,
+              artworkUrl: next?.info?.artworkUrl || candidate?.info?.artworkUrl
+            }
+          };
         }
       } catch (err) {
         console.error("Spotify mirror search failed", err);
@@ -1440,6 +1465,7 @@ async function playNext(guildId, force = false) {
     }
   }
   state.now = chosen;
+  state.nowDisplay = displayTrack;
   state.playing = true;
   state.startedAt = Date.now();
   state.queueFinishedNotified = false;
@@ -1460,10 +1486,13 @@ async function playNext(guildId, force = false) {
     console.error("Failed to start track", err);
     state.playing = false;
     state.now = null;
+    state.nowDisplay = null;
     return;
   }
   state.queue.shift();
-  await announceNowPlayingStart(state, state.now);
+  if (announce) {
+    await announceNowPlayingStart(state);
+  }
   await updateQueueMessage(guildId);
   await updateNowPlayingMessage(guildId);
 }

@@ -22,6 +22,7 @@ module.exports = async function handleStop(ctx) {
   }
   state.queue = [];
   state.now = null;
+  state.nowDisplay = null;
   state.playing = false;
 
   await interaction.reply(
@@ -34,4 +35,3 @@ module.exports = async function handleStop(ctx) {
   await updateQueueMessage(interaction.guild.id);
   await updateNowPlayingMessage(interaction.guild.id);
 };
-
