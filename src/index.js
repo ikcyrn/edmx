@@ -1198,6 +1198,24 @@ async function playNext(guildId, force = false) {
   }
 
   let chosen = next;
+  if (next?.info?.sourceName === "spotify") {
+    const title = next?.info?.title || "";
+    const author = next?.info?.author || "";
+    const query = `${title} ${author}`.trim();
+    const node = shoukaku.nodes.get("main");
+    if (query && node) {
+      try {
+        const res = await node.rest.resolve(`scsearch:${query}`);
+        const result = normalizeLoadResult(res);
+        const candidate = result.tracks?.find((t) => !isPreviewSoundCloud(t));
+        if (candidate) {
+          chosen = candidate;
+        }
+      } catch (err) {
+        console.error("Spotify mirror search failed", err);
+      }
+    }
+  }
   if (isPreviewSoundCloud(next) && (next?.info?.length || 0) > 60000) {
     const replacement = await findNonPreviewSoundCloud(next);
     if (replacement) {
