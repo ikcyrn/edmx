@@ -11,6 +11,7 @@ const {
 const path = require("path");
 const fs = require("fs");
 const { Shoukaku, Connectors } = require("shoukaku");
+const commandHandlers = require("./commands");
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates]
@@ -1283,6 +1284,23 @@ async function replyWarn(interaction, message) {
   await interaction.reply({ ...payload, ephemeral: true });
 }
 
+async function stopCurrentForTransition(state, errorPrefix) {
+  if (!state?.player) return false;
+  state.suppressStopEvents += 1;
+  try {
+    await state.player.stopTrack();
+    return true;
+  } catch (err) {
+    state.suppressStopEvents = Math.max(0, state.suppressStopEvents - 1);
+    if (errorPrefix) {
+      console.error(errorPrefix, err);
+    } else {
+      console.error("Failed to stop current track", err);
+    }
+    return false;
+  }
+}
+
 async function requireSameVoiceChannel(interaction) {
   const member = await interaction.guild.members.fetch(interaction.user.id);
   const userChannel = member.voice.channel;
@@ -1448,8 +1466,13 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
   if (!interaction.isChatInputCommand()) return;
 
-  const isLanguageCommand = interaction.commandName === "language";
-  if (!isLanguageCommand) {
+  const commandEntry = commandHandlers[interaction.commandName];
+  if (!commandEntry) {
+    await replyWarn(interaction, t(interaction.guild.id, "unknown_command"));
+    return;
+  }
+
+  if (commandEntry.requiresVoice) {
     const allowed = await requireSameVoiceChannel(interaction);
     if (!allowed) return;
   }
@@ -1457,322 +1480,27 @@ client.on(Events.InteractionCreate, async (interaction) => {
   const state = getState(interaction.guild.id);
 
   try {
-    switch (interaction.commandName) {
-      case "language": {
-        const lang = interaction.options.getString("value", true);
-        if (!LANGUAGE_NAMES[lang]) {
-          await replyWarn(interaction, t(interaction.guild.id, "error_generic"));
-          return;
-        }
-        setGuildLanguage(interaction.guild.id, lang);
-        await interaction.reply(
-          buildEmbedMessage({
-            title: t(interaction.guild.id, "language_set_title"),
-            description: t(interaction.guild.id, "language_set_desc", { language: LANGUAGE_NAMES[lang] }),
-            icon: "queue"
-          })
-        );
-        return;
-      }
-      case "play": {
-        await interaction.deferReply();
-        await ensurePlayer(interaction, state);
-        state.lastChannelId = interaction.channelId;
-        state.queueFinishedNotified = false;
-
-        const overloadReason = getNodeOverloadReason();
-        if (overloadReason) {
-          await interaction.editReply(
-            buildEmbedMessage({
-              title: t(interaction.guild.id, "busy_title"),
-              description: t(interaction.guild.id, "busy_desc"),
-              icon: "warning"
-            })
-          );
-          return;
-        }
-
-        const query = interaction.options.getString("query", true);
-        const res = await resolveTracks(query);
-        const result = normalizeLoadResult(res);
-        const loadType = (result.loadType || "").toUpperCase();
-
-        if (loadType === "LOAD_FAILED") {
-          await interaction.editReply(
-            buildEmbedMessage({
-              title: t(interaction.guild.id, "load_failed_title"),
-              description: t(interaction.guild.id, "load_failed_desc"),
-              icon: "warning"
-            })
-          );
-          return;
-        }
-        if (loadType === "NO_MATCHES") {
-          await interaction.editReply(
-            buildEmbedMessage({
-              title: t(interaction.guild.id, "no_matches_title"),
-              description: t(interaction.guild.id, "no_matches_desc"),
-              icon: "warning"
-            })
-          );
-          return;
-        }
-
-        if (!result || result.tracks.length === 0) {
-          await interaction.editReply(
-            buildEmbedMessage({
-              title: t(interaction.guild.id, "no_matches_title"),
-              description: t(interaction.guild.id, "no_matches_desc"),
-              icon: "warning"
-            })
-          );
-          return;
-        }
-
-        const isCollection =
-          /\/(playlist|album)\//.test(query) ||
-          result.loadType === "PLAYLIST_LOADED" ||
-          result.loadType === "playlist_loaded" ||
-          Boolean(result.playlistInfo?.name);
-
-        const hasActivePlayerTrack = Boolean(state.player?.track);
-        const isPlaying = Boolean(state.playing && (state.now || hasActivePlayerTrack));
-        clearQueueFinishTimer(state);
-
-        if (isCollection && result.tracks.length > 1) {
-          state.queue.push(...result.tracks);
-          await interaction.editReply(
-            buildEmbedMessage({
-              title: t(interaction.guild.id, "queued_playlist_title"),
-              description: t(interaction.guild.id, "queued_playlist_desc", {
-                name: result.playlistInfo?.name || t(interaction.guild.id, "unknown_title"),
-                count: result.tracks.length
-              }),
-              icon: "queue"
-            })
-          );
-          if (!isPlaying) {
-            const first = result.tracks[0];
-            const context = t(interaction.guild.id, "from_playlist_context", {
-              name: result.playlistInfo?.name || t(interaction.guild.id, "unknown_title"),
-              count: result.tracks.length
-            });
-            await interaction.followUp(buildTrackEmbed(first, t(interaction.guild.id, "now_playing_title"), "nowplaying", context, interaction.guild.id));
-          }
-        } else {
-          const track = result.tracks[0];
-          state.queue.push(track);
-          if (isPlaying) {
-            await interaction.editReply(
-              buildTrackEmbed(
-                track,
-                t(interaction.guild.id, "queued_track_title"),
-                "queue",
-                t(interaction.guild.id, "queued_track_desc"),
-                interaction.guild.id
-              )
-            );
-          } else {
-            await interaction.editReply(buildTrackEmbed(track, t(interaction.guild.id, "now_playing_title"), "nowplaying", null, interaction.guild.id));
-          }
-        }
-        if (!isPlaying) {
-          // Recover from desynced Lavalink state (e.g. after skip-at-end) before starting a new track.
-          if (state.player?.track) {
-            state.suppressStopEvents += 1;
-            try {
-              await state.player.stopTrack();
-            } catch (err) {
-              state.suppressStopEvents = Math.max(0, state.suppressStopEvents - 1);
-              console.error("Failed to stop stale track before starting new playback", err);
-            }
-          }
-          state.playing = false;
-          state.now = null;
-          await playNext(interaction.guild.id, true);
-        } else {
-          await updateQueueMessage(interaction.guild.id);
-        }
-        return;
-      }
-      case "skip": {
-        if (!state.player || !state.now) {
-          await replyWarn(interaction, t(interaction.guild.id, "warn_nothing_playing"));
-          return;
-        }
-        const position = interaction.options.getInteger("position");
-        if (position !== null && position !== undefined) {
-          if (position < 0) {
-            await replyWarn(interaction, t(interaction.guild.id, "warn_negative_position"));
-            return;
-          }
-          if (position === 0) {
-            state.suppressStopEvents += 1;
-            state.playing = false;
-            state.now = null;
-            await state.player.stopTrack();
-            await interaction.reply(buildEmbedMessage({
-              title: t(interaction.guild.id, "skipped_title"),
-              description: t(interaction.guild.id, "skipped_current_desc"),
-              icon: "skip"
-            }));
-            await playNext(interaction.guild.id, true);
-            if (state.now) {
-              await interaction.followUp(buildTrackEmbed(state.now, t(interaction.guild.id, "now_playing_title"), "nowplaying", null, interaction.guild.id));
-            }
-            return;
-          }
-          if (position < 1 || position > state.queue.length) {
-            await replyWarn(interaction, t(interaction.guild.id, "warn_position_out_of_range", { length: state.queue.length }));
-            return;
-          }
-          state.queue.splice(0, position - 1);
-          state.suppressStopEvents += 1;
-          state.playing = false;
-          state.now = null;
-          await state.player.stopTrack();
-          await interaction.reply(buildEmbedMessage({
-            title: t(interaction.guild.id, "skipped_title"),
-            description: t(interaction.guild.id, "skipped_to_desc", { position }),
-            icon: "skip"
-          }));
-          await playNext(interaction.guild.id, true);
-          if (state.now) {
-            await interaction.followUp(buildTrackEmbed(state.now, t(interaction.guild.id, "now_playing_title"), "nowplaying", null, interaction.guild.id));
-          }
-          return;
-        }
-        state.suppressStopEvents += 1;
-        state.playing = false;
-        state.now = null;
-        await state.player.stopTrack();
-        await interaction.reply(buildEmbedMessage({
-          title: t(interaction.guild.id, "skipped_title"),
-          description: t(interaction.guild.id, "skipped_desc"),
-          icon: "skip"
-        }));
-        await playNext(interaction.guild.id, true);
-        if (state.now) {
-          await interaction.followUp(buildTrackEmbed(state.now, t(interaction.guild.id, "now_playing_title"), "nowplaying", null, interaction.guild.id));
-        }
-        return;
-      }
-      case "pause": {
-        if (!state.player || !state.now) {
-          await replyWarn(interaction, t(interaction.guild.id, "warn_nothing_playing"));
-          return;
-        }
-        await state.player.setPaused(true);
-        await interaction.reply(
-          buildEmbedMessage({
-            title: t(interaction.guild.id, "paused_title"),
-            description: t(interaction.guild.id, "paused_desc"),
-            icon: "pause"
-          })
-        );
-        return;
-      }
-      case "resume": {
-        if (!state.player || !state.now) {
-          await replyWarn(interaction, t(interaction.guild.id, "warn_nothing_playing"));
-          return;
-        }
-        await state.player.setPaused(false);
-        await interaction.reply(
-          buildEmbedMessage({
-            title: t(interaction.guild.id, "resumed_title"),
-            description: t(interaction.guild.id, "resumed_desc"),
-            icon: "resume"
-          })
-        );
-        return;
-      }
-      case "nowplaying": {
-        if (!state.now) {
-          await replyWarn(interaction, t(interaction.guild.id, "warn_nothing_playing"));
-          return;
-        }
-        const track = state.now;
-        await interaction.reply(buildTrackEmbed(track, t(interaction.guild.id, "now_playing_title"), "nowplaying", null, interaction.guild.id));
-        return;
-      }
-      case "queue": {
-        if (state.queue.length === 0) {
-          await replyWarn(interaction, t(interaction.guild.id, "queue_empty_warn"));
-          return;
-        }
-        const payload = buildQueuePayload(state, 1, interaction.user.id);
-        await interaction.reply(payload);
-        const message = await interaction.fetchReply();
-        const attachment = message.attachments.find((a) => a.name === ICONS.queue);
-        state.queueMessageId = message.id;
-        state.queueChannelId = interaction.channelId;
-        state.lastChannelId = interaction.channelId;
-        state.queuePage = 1;
-        state.queueIconUrl = attachment ? attachment.url : null;
-        return;
-      }
-      case "shuffle": {
-        if (state.queue.length < 2) {
-          await replyWarn(interaction, t(interaction.guild.id, "queue_not_enough_shuffle"));
-          return;
-        }
-        for (let i = state.queue.length - 1; i > 0; i -= 1) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [state.queue[i], state.queue[j]] = [state.queue[j], state.queue[i]];
-        }
-        await interaction.reply(
-          buildEmbedMessage({
-            title: t(interaction.guild.id, "shuffled_title"),
-            description: t(interaction.guild.id, "shuffled_desc"),
-            icon: "shuffle"
-          })
-        );
-        await updateQueueMessage(interaction.guild.id);
-        return;
-      }
-      case "clear": {
-        if (state.queue.length === 0) {
-          await replyWarn(interaction, t(interaction.guild.id, "queue_already_empty"));
-          return;
-        }
-        state.queue = [];
-        await interaction.reply(
-          buildEmbedMessage({
-            title: t(interaction.guild.id, "queue_cleared_title"),
-            description: t(interaction.guild.id, "queue_cleared_desc"),
-            icon: "queue"
-          })
-        );
-        await updateQueueMessage(interaction.guild.id);
-        return;
-      }
-      case "leave": {
-        if (state.player) {
-          await state.player.destroy();
-          state.player = null;
-          state.queue = [];
-          state.now = null;
-          state.playing = false;
-        }
-        try {
-          shoukaku.leaveVoiceChannel(interaction.guild.id);
-        } catch (err) {
-          console.error("Error leaving voice channel", err);
-        }
-        await interaction.reply(
-          buildEmbedMessage({
-            title: t(interaction.guild.id, "disconnected_title"),
-            description: t(interaction.guild.id, "disconnected_desc"),
-            icon: "leave"
-          })
-        );
-        await updateQueueMessage(interaction.guild.id);
-        return;
-      }
-      default:
-        await replyWarn(interaction, t(interaction.guild.id, "unknown_command"));
-    }
+    await commandEntry.run({
+      interaction,
+      state,
+      t,
+      LANGUAGE_NAMES,
+      ICONS,
+      shoukaku,
+      setGuildLanguage,
+      buildEmbedMessage,
+      buildTrackEmbed,
+      buildQueuePayload,
+      replyWarn,
+      ensurePlayer,
+      getNodeOverloadReason,
+      resolveTracks,
+      normalizeLoadResult,
+      clearQueueFinishTimer,
+      stopCurrentForTransition,
+      playNext,
+      updateQueueMessage
+    });
   } catch (err) {
     console.error(err);
     const message = toUserMessage(err, interaction.guild.id);
