@@ -792,6 +792,7 @@ function trackTitle(track) {
 }
 
 function isPlayerConnected(player) {
+  if (player?.track) return true;
   const conn = player?.connection;
   if (!conn) return false;
   if (typeof conn.connected === "boolean") return conn.connected;
@@ -868,12 +869,14 @@ async function ensurePlayer(interaction, state) {
 
   if (state.player) {
     if (!isPlayerConnected(state.player)) {
-      try {
-        await state.player.destroy();
-      } catch (err) {
-        console.error("Error destroying disconnected player", err);
+      if (!state.player?.track) {
+        try {
+          await state.player.destroy();
+        } catch (err) {
+          console.error("Error destroying disconnected player", err);
+        }
+        state.player = null;
       }
-      state.player = null;
     }
     if (state.player) {
       const currentChannelId = state.player.connection?.channelId || existingConnection?.channelId;
