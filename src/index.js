@@ -560,6 +560,33 @@ function logTrackDebug(prefix, track, extra) {
   console.log(`[track:${prefix}]`, JSON.stringify(payload));
 }
 
+function isPreviewSoundCloud(track) {
+  const source = track?.info?.sourceName;
+  const identifier = track?.info?.identifier || "";
+  if (source !== "soundcloud") return false;
+  return identifier.includes("/preview/") || identifier.includes("/preview");
+}
+
+async function findNonPreviewSoundCloud(track) {
+  if (!track || track?.info?.sourceName !== "soundcloud") return null;
+  if (!isPreviewSoundCloud(track)) return null;
+  const title = track?.info?.title || "";
+  const author = track?.info?.author || "";
+  const query = `${title} ${author}`.trim();
+  if (!query) return null;
+  const node = shoukaku.nodes.get("main");
+  if (!node) return null;
+  try {
+    const res = await node.rest.resolve(`scsearch:${query}`);
+    const result = normalizeLoadResult(res);
+    const candidate = result.tracks?.find((t) => !isPreviewSoundCloud(t));
+    return candidate || null;
+  } catch (err) {
+    console.error("Preview fallback search failed", err);
+    return null;
+  }
+}
+
 async function tryEarlyEndFallback(state, guildId) {
   const track = state.now;
   if (!track || track?.info?.sourceName !== "spotify") return false;
@@ -586,7 +613,7 @@ async function tryEarlyEndFallback(state, guildId) {
   try {
     const res = await node.rest.resolve(`scsearch:${query}`);
     const result = normalizeLoadResult(res);
-    const next = result.tracks?.[0];
+    const next = result.tracks?.find((t) => !isPreviewSoundCloud(t)) || result.tracks?.[0];
     if (!next) return false;
     state.queue.unshift(next);
     state.playing = false;
@@ -1165,10 +1192,17 @@ async function playNext(guildId, force = false) {
     return;
   }
 
-  state.now = next;
+  let chosen = next;
+  if (isPreviewSoundCloud(next) && (next?.info?.length || 0) > 60000) {
+    const replacement = await findNonPreviewSoundCloud(next);
+    if (replacement) {
+      chosen = replacement;
+    }
+  }
+  state.now = chosen;
   state.playing = true;
   state.startedAt = Date.now();
-  logTrackDebug("start", next, { startedAt: state.startedAt });
+  logTrackDebug("start", chosen, { startedAt: state.startedAt });
   if (state.idleTimer) {
     clearTimeout(state.idleTimer);
     state.idleTimer = null;
@@ -1179,7 +1213,7 @@ async function playNext(guildId, force = false) {
   if (state.player.setPaused) {
     await state.player.setPaused(false);
   }
-  await state.player.playTrack({ track: { encoded: next.encoded } });
+  await state.player.playTrack({ track: { encoded: chosen.encoded } });
   await updateQueueMessage(guildId);
 }
 
