@@ -852,7 +852,8 @@ function getState(guildId) {
       queueMessageId: null,
       queueChannelId: null,
       queueIconUrl: null,
-      queuePage: 1
+      queuePage: 1,
+      queueFinishTimer: null
     });
   }
   return queues.get(guildId);
@@ -867,6 +868,7 @@ function resetState(state) {
   state.queue = [];
   state.now = null;
   state.playing = false;
+  clearQueueFinishTimer(state);
 }
 
 async function updateQueueMessage(guildId) {
@@ -902,6 +904,22 @@ async function notifyQueueFinished(state) {
     console.error("Failed to notify queue finished", err);
     state.queueFinishedNotified = false;
   }
+}
+
+function clearQueueFinishTimer(state) {
+  if (!state.queueFinishTimer) return;
+  clearTimeout(state.queueFinishTimer);
+  state.queueFinishTimer = null;
+}
+
+function scheduleQueueFinish(state) {
+  if (state.queueFinishTimer || state.queueFinishedNotified) return;
+  state.queueFinishTimer = setTimeout(() => {
+    state.queueFinishTimer = null;
+    if (state.queue.length === 0) {
+      void notifyQueueFinished(state);
+    }
+  }, 1000);
 }
 
 function formatDuration(ms) {
@@ -1209,6 +1227,7 @@ async function requireSameVoiceChannel(interaction) {
 async function playNext(guildId, force = false) {
   const state = queues.get(guildId);
   if (!state || !state.player) return;
+  clearQueueFinishTimer(state);
   if (force && state.playing && !state.now) {
     state.playing = false;
   }
@@ -1219,7 +1238,7 @@ async function playNext(guildId, force = false) {
     state.now = null;
     state.playing = false;
     await updateQueueMessage(guildId);
-    await notifyQueueFinished(state);
+    scheduleQueueFinish(state);
     if (state.player && !state.idleTimer) {
       state.idleTimer = setTimeout(async () => {
         try {
@@ -1425,6 +1444,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
           Boolean(result.playlistInfo?.name);
 
         const isPlaying = Boolean(state.now && state.playing);
+        clearQueueFinishTimer(state);
 
         if (isCollection && result.tracks.length > 1) {
           state.queue.push(...result.tracks);
