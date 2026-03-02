@@ -45,6 +45,7 @@ const ICONS = {
   nowplaying: "nowplaying.png",
   queue: "queue.png",
   shuffle: "shuffle.png",
+  stop: "stop.png",
   leave: "leave.png",
   warning: "warning.png",
   error: "error.png"
@@ -58,6 +59,7 @@ const ICON_COLORS = {
   nowplaying: 0x6366f1,
   queue: 0x6366f1,
   shuffle: 0x6366f1,
+  stop: 0x6366f1,
   leave: 0x6366f1,
   warning: 0xfbbf24,
   error: 0xf87171
@@ -108,12 +110,15 @@ const MESSAGES = {
     duration_label: "Duration",
     from_playlist_context: "From: {name} • {count} tracks",
     warn_nothing_playing: "Nothing is playing right now.",
+    warn_end_of_queue_use_stop: "You're at the end of the queue. Use /stop to end playback.",
     warn_negative_position: "Position cannot be negative. Use 0 to skip the current track.",
     warn_position_out_of_range: "Position out of range. Queue length is {length}.",
     skipped_title: "Skipped",
     skipped_current_desc: "Skipped current track.",
     skipped_to_desc: "Skipped to position {position}.",
     skipped_desc: "Skipped.",
+    stopped_title: "Stopped",
+    stopped_desc: "Playback stopped and queue cleared.",
     paused_title: "Paused",
     paused_desc: "Playback paused.",
     resumed_title: "Resumed",
@@ -174,12 +179,15 @@ const MESSAGES = {
     duration_label: "时长",
     from_playlist_context: "来自：{name} • {count}首",
     warn_nothing_playing: "目前没有在播放。",
+    warn_end_of_queue_use_stop: "你已经到达队列末尾。请使用 /stop 来结束播放。",
     warn_negative_position: "位置不能为负数。用 0 跳过当前曲目。",
     warn_position_out_of_range: "位置超出范围。队列长度为 {length}。",
     skipped_title: "已跳过",
     skipped_current_desc: "已跳过当前曲目。",
     skipped_to_desc: "已跳到第 {position} 首。",
     skipped_desc: "已跳过。",
+    stopped_title: "已停止",
+    stopped_desc: "已停止播放并清空队列。",
     paused_title: "已暂停",
     paused_desc: "播放已暂停。",
     resumed_title: "已继续",
@@ -240,12 +248,15 @@ const MESSAGES = {
     duration_label: "時長",
     from_playlist_context: "來自：{name} • {count}首",
     warn_nothing_playing: "目前沒有在播放。",
+    warn_end_of_queue_use_stop: "你已到達隊列末尾。請使用 /stop 來結束播放。",
     warn_negative_position: "位置不能為負數。用 0 跳過目前曲目。",
     warn_position_out_of_range: "位置超出範圍。隊列長度為 {length}。",
     skipped_title: "已跳過",
     skipped_current_desc: "已跳過目前曲目。",
     skipped_to_desc: "已跳到第 {position} 首。",
     skipped_desc: "已跳過。",
+    stopped_title: "已停止",
+    stopped_desc: "已停止播放並清空隊列。",
     paused_title: "已暫停",
     paused_desc: "播放已暫停。",
     resumed_title: "已繼續",
@@ -306,12 +317,15 @@ const MESSAGES = {
     duration_label: "再生時間",
     from_playlist_context: "元：{name} • {count}曲",
     warn_nothing_playing: "再生中の曲がありません。",
+    warn_end_of_queue_use_stop: "キューの最後です。再生を終了するには /stop を使ってください。",
     warn_negative_position: "位置は負の値にできません。0 で現在の曲をスキップします。",
     warn_position_out_of_range: "位置が範囲外です。キューの長さは {length} です。",
     skipped_title: "スキップ",
     skipped_current_desc: "現在の曲をスキップしました。",
     skipped_to_desc: "{position} 番目へスキップしました。",
     skipped_desc: "スキップしました。",
+    stopped_title: "停止",
+    stopped_desc: "再生を停止し、キューをクリアしました。",
     paused_title: "一時停止",
     paused_desc: "再生を一時停止しました。",
     resumed_title: "再開",
@@ -372,12 +386,15 @@ const MESSAGES = {
     duration_label: "길이",
     from_playlist_context: "출처: {name} • {count}곡",
     warn_nothing_playing: "현재 재생 중인 곡이 없습니다.",
+    warn_end_of_queue_use_stop: "큐의 마지막입니다. 재생을 끝내려면 /stop을 사용하세요.",
     warn_negative_position: "위치는 음수가 될 수 없습니다. 0은 현재 곡을 건너뜁니다.",
     warn_position_out_of_range: "범위를 벗어났습니다. 큐 길이는 {length}입니다.",
     skipped_title: "건너뜀",
     skipped_current_desc: "현재 곡을 건너뛰었습니다.",
     skipped_to_desc: "{position}번으로 건너뛰었습니다.",
     skipped_desc: "건너뛰었습니다.",
+    stopped_title: "중지",
+    stopped_desc: "재생을 중지하고 큐를 비웠습니다.",
     paused_title: "일시정지",
     paused_desc: "재생을 일시정지했습니다.",
     resumed_title: "재생",
@@ -983,6 +1000,19 @@ async function updateNowPlayingMessage(guildId) {
   }
 }
 
+async function announceNowPlayingStart(state, track) {
+  if (!state || !track) return;
+  const channelId = state.lastChannelId || state.queueChannelId || state.nowPlayingChannelId;
+  if (!channelId) return;
+  try {
+    const channel = await client.channels.fetch(channelId);
+    if (!channel || !channel.isTextBased()) return;
+    await channel.send(buildTrackEmbed(track, t(state.guildId, "now_playing_title"), "nowplaying", null, state.guildId));
+  } catch (err) {
+    console.error("Failed to announce now playing", err);
+  }
+}
+
 async function notifyQueueFinished(state) {
   if (state.queueFinishedNotified) return;
   const channelId = state.queueChannelId || state.lastChannelId;
@@ -1433,6 +1463,7 @@ async function playNext(guildId, force = false) {
     return;
   }
   state.queue.shift();
+  await announceNowPlayingStart(state, state.now);
   await updateQueueMessage(guildId);
   await updateNowPlayingMessage(guildId);
 }

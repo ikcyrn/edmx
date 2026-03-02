@@ -20,6 +20,7 @@ const commands = [
         .setDescription("Queue position to skip to (0 = current, 1 = next track)")
         .setRequired(false)
     ),
+  new SlashCommandBuilder().setName("stop").setDescription("Stop playback and clear the queue"),
   new SlashCommandBuilder().setName("pause").setDescription("Pause playback"),
   new SlashCommandBuilder().setName("resume").setDescription("Resume playback"),
   new SlashCommandBuilder().setName("nowplaying").setDescription("Show the current track"),

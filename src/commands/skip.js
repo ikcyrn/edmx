@@ -1,7 +1,11 @@
 module.exports = async function handleSkip(ctx) {
-  const { interaction, state, t, replyWarn, buildEmbedMessage, playNext, buildTrackEmbed, stopCurrentForTransition } = ctx;
+  const { interaction, state, t, replyWarn, buildEmbedMessage, playNext, stopCurrentForTransition } = ctx;
   if (!state.player || !state.now) {
     await replyWarn(interaction, t(interaction.guild.id, "warn_nothing_playing"));
+    return;
+  }
+  if (state.queue.length === 0) {
+    await replyWarn(interaction, t(interaction.guild.id, "warn_end_of_queue_use_stop"));
     return;
   }
   const position = interaction.options.getInteger("position");
@@ -22,11 +26,6 @@ module.exports = async function handleSkip(ctx) {
         })
       );
       await playNext(interaction.guild.id, true);
-      if (state.now) {
-        await interaction.followUp(
-          buildTrackEmbed(state.now, t(interaction.guild.id, "now_playing_title"), "nowplaying", null, interaction.guild.id)
-        );
-      }
       return;
     }
     if (position < 1 || position > state.queue.length) {
@@ -45,11 +44,6 @@ module.exports = async function handleSkip(ctx) {
       })
     );
     await playNext(interaction.guild.id, true);
-    if (state.now) {
-      await interaction.followUp(
-        buildTrackEmbed(state.now, t(interaction.guild.id, "now_playing_title"), "nowplaying", null, interaction.guild.id)
-      );
-    }
     return;
   }
   state.playing = false;
@@ -63,10 +57,4 @@ module.exports = async function handleSkip(ctx) {
     })
   );
   await playNext(interaction.guild.id, true);
-  if (state.now) {
-    await interaction.followUp(
-      buildTrackEmbed(state.now, t(interaction.guild.id, "now_playing_title"), "nowplaying", null, interaction.guild.id)
-    );
-  }
 };
-

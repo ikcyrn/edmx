@@ -7,6 +7,7 @@ const handleNowPlaying = require("./nowplaying");
 const handleQueue = require("./queue");
 const handleShuffle = require("./shuffle");
 const handleClear = require("./clear");
+const handleStop = require("./stop");
 const handleLeave = require("./leave");
 
 module.exports = {
@@ -19,6 +20,6 @@ module.exports = {
   queue: { run: handleQueue, requiresVoice: true },
   shuffle: { run: handleShuffle, requiresVoice: true },
   clear: { run: handleClear, requiresVoice: true },
+  stop: { run: handleStop, requiresVoice: true },
   leave: { run: handleLeave, requiresVoice: true }
 };
-
