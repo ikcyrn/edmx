@@ -887,6 +887,7 @@ async function notifyQueueFinished(state) {
   if (state.queueFinishedNotified) return;
   const channelId = state.queueChannelId || state.lastChannelId;
   if (!channelId) return;
+  state.queueFinishedNotified = true;
   try {
     const channel = await client.channels.fetch(channelId);
     if (!channel || !channel.isTextBased()) return;
@@ -897,9 +898,9 @@ async function notifyQueueFinished(state) {
         icon: "queue"
       })
     );
-    state.queueFinishedNotified = true;
   } catch (err) {
     console.error("Failed to notify queue finished", err);
+    state.queueFinishedNotified = false;
   }
 }
 
@@ -1212,7 +1213,6 @@ async function playNext(guildId, force = false) {
     state.playing = false;
   }
   if (!force && state.playing && state.now) return;
-  if (!force && state.player?.track) return;
 
   const next = state.queue.shift();
   if (!next) {
