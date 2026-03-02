@@ -3,9 +3,9 @@ module.exports = async function handleStop(ctx) {
     interaction,
     state,
     t,
+    shoukaku,
     replyWarn,
     buildEmbedMessage,
-    stopCurrentForTransition,
     clearQueueFinishTimer,
     updateQueueMessage,
     updateNowPlayingMessage
@@ -20,21 +20,35 @@ module.exports = async function handleStop(ctx) {
   }
 
   if (hasPlayer) {
-    const stopped = await stopCurrentForTransition(state, "Failed to stop current track for stop command");
-    if (!stopped && state.player) {
-      try {
-        await state.player.destroy();
-      } catch (err) {
-        console.error("Failed to destroy player during stop command", err);
-      }
+    try {
+      await state.player.destroy();
+    } catch (err) {
+      console.error("Failed to destroy player during stop command", err);
+    } finally {
       state.player = null;
     }
   }
+
+  try {
+    shoukaku.leaveVoiceChannel(interaction.guild.id);
+  } catch (err) {
+    console.error("Failed to leave voice channel during stop command", err);
+  }
+
+  if (state.idleTimer) {
+    clearTimeout(state.idleTimer);
+    state.idleTimer = null;
+  }
   clearQueueFinishTimer(state);
+  state.retryCounts = {};
+  state.retrySeen = {};
+  state.suppressStopEvents = 0;
+  state.queueFinishedNotified = false;
   state.queue = [];
   state.now = null;
   state.nowDisplay = null;
   state.playing = false;
+  state.startedAt = null;
 
   await interaction.reply(
     buildEmbedMessage({
@@ -43,6 +57,18 @@ module.exports = async function handleStop(ctx) {
       icon: "stop"
     })
   );
-  await updateQueueMessage(interaction.guild.id);
-  await updateNowPlayingMessage(interaction.guild.id);
+
+  // Keep queue/nowplaying message references but refresh content to reflect stopped state.
+  if (state.queueMessageId || state.queueChannelId || state.nowPlayingMessageId || state.nowPlayingChannelId) {
+    try {
+      await updateQueueMessage(interaction.guild.id);
+    } catch (err) {
+      console.error("Failed to refresh queue message after stop", err);
+    }
+    try {
+      await updateNowPlayingMessage(interaction.guild.id);
+    } catch (err) {
+      console.error("Failed to refresh now playing message after stop", err);
+    }
+  }
 };
