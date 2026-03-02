@@ -3,7 +3,6 @@ module.exports = async function handleStop(ctx) {
     interaction,
     state,
     t,
-    shoukaku,
     replyWarn,
     buildEmbedMessage,
     clearQueueFinishTimer,
@@ -27,12 +26,6 @@ module.exports = async function handleStop(ctx) {
     } finally {
       state.player = null;
     }
-  }
-
-  try {
-    shoukaku.leaveVoiceChannel(interaction.guild.id);
-  } catch (err) {
-    console.error("Failed to leave voice channel during stop command", err);
   }
 
   if (state.idleTimer) {
