@@ -541,6 +541,25 @@ function trackKey(track) {
   );
 }
 
+function logTrackDebug(prefix, track, extra) {
+  if (!track) {
+    console.log(`[track:${prefix}] none`);
+    return;
+  }
+  const info = track.info || {};
+  const payload = {
+    title: info.title,
+    author: info.author,
+    source: info.sourceName,
+    uri: info.uri,
+    identifier: info.identifier,
+    length: info.length,
+    isrc: info.isrc,
+    extra
+  };
+  console.log(`[track:${prefix}]`, JSON.stringify(payload));
+}
+
 async function tryEarlyEndFallback(state, guildId) {
   const track = state.now;
   if (!track || track?.info?.sourceName !== "spotify") return false;
@@ -997,6 +1016,9 @@ async function ensurePlayer(interaction, state) {
       if (reason && String(reason).toUpperCase() === "REPLACED") {
         return;
       }
+      const endedAt = Date.now();
+      const playedMs = state.startedAt ? endedAt - state.startedAt : null;
+      logTrackDebug("end", state.now, { reason, playedMs });
       void (async () => {
         const recovered = await tryEarlyEndFallback(state, interaction.guild.id);
         if (recovered) return;
@@ -1146,6 +1168,7 @@ async function playNext(guildId, force = false) {
   state.now = next;
   state.playing = true;
   state.startedAt = Date.now();
+  logTrackDebug("start", next, { startedAt: state.startedAt });
   if (state.idleTimer) {
     clearTimeout(state.idleTimer);
     state.idleTimer = null;
