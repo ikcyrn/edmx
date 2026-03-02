@@ -1536,7 +1536,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
           Boolean(result.playlistInfo?.name);
 
         const hasActivePlayerTrack = Boolean(state.player?.track);
-        const isPlaying = Boolean((state.now && state.playing) || hasActivePlayerTrack);
+        const isPlaying = Boolean(state.playing && (state.now || hasActivePlayerTrack));
         clearQueueFinishTimer(state);
 
         if (isCollection && result.tracks.length > 1) {
