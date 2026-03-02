@@ -96,6 +96,8 @@ const MESSAGES = {
     no_matches_desc: "No matches found. Try another link or search.",
     queued_playlist_title: "Queued playlist",
     queued_playlist_desc: "{name} ({count} tracks)",
+    queued_track_title: "Added to queue",
+    queued_track_desc: "Added to the end of the queue.",
     now_playing_title: "Now Playing",
     unknown_title: "Unknown title",
     unknown_artist: "Unknown",
@@ -158,6 +160,8 @@ const MESSAGES = {
     no_matches_desc: "没有找到结果，请换一个链接或搜索词。",
     queued_playlist_title: "已加入播放列表",
     queued_playlist_desc: "{name}（{count}首）",
+    queued_track_title: "已加入队列",
+    queued_track_desc: "已添加到队列末尾。",
     now_playing_title: "正在播放",
     unknown_title: "未知标题",
     unknown_artist: "未知",
@@ -220,6 +224,8 @@ const MESSAGES = {
     no_matches_desc: "沒有找到結果，請換一個連結或搜尋詞。",
     queued_playlist_title: "已加入播放清單",
     queued_playlist_desc: "{name}（{count}首）",
+    queued_track_title: "已加入隊列",
+    queued_track_desc: "已加入隊列最後。",
     now_playing_title: "正在播放",
     unknown_title: "未知標題",
     unknown_artist: "未知",
@@ -282,6 +288,8 @@ const MESSAGES = {
     no_matches_desc: "一致する結果がありません。別のリンクか検索語を試してください。",
     queued_playlist_title: "プレイリストを追加",
     queued_playlist_desc: "{name}（{count}曲）",
+    queued_track_title: "キューに追加",
+    queued_track_desc: "キューの末尾に追加しました。",
     now_playing_title: "再生中",
     unknown_title: "不明なタイトル",
     unknown_artist: "不明",
@@ -344,6 +352,8 @@ const MESSAGES = {
     no_matches_desc: "결과를 찾지 못했습니다. 다른 링크나 검색어를 사용해 주세요.",
     queued_playlist_title: "플레이리스트 추가됨",
     queued_playlist_desc: "{name} ({count}곡)",
+    queued_track_title: "큐에 추가됨",
+    queued_track_desc: "큐의 마지막에 추가했습니다.",
     now_playing_title: "재생 중",
     unknown_title: "알 수 없는 제목",
     unknown_artist: "알 수 없음",
@@ -1227,6 +1237,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
           result.loadType === "playlist_loaded" ||
           Boolean(result.playlistInfo?.name);
 
+        const isPlaying = Boolean(state.now || state.playing || state.player?.track);
+
         if (isCollection && result.tracks.length > 1) {
           state.queue.push(...result.tracks);
           await interaction.editReply(
@@ -1239,18 +1251,31 @@ client.on(Events.InteractionCreate, async (interaction) => {
               icon: "queue"
             })
           );
-          const first = result.tracks[0];
-          const context = t(interaction.guild.id, "from_playlist_context", {
-            name: result.playlistInfo?.name || t(interaction.guild.id, "unknown_title"),
-            count: result.tracks.length
-          });
-          await interaction.followUp(buildTrackEmbed(first, t(interaction.guild.id, "now_playing_title"), "nowplaying", context, interaction.guild.id));
+          if (!isPlaying) {
+            const first = result.tracks[0];
+            const context = t(interaction.guild.id, "from_playlist_context", {
+              name: result.playlistInfo?.name || t(interaction.guild.id, "unknown_title"),
+              count: result.tracks.length
+            });
+            await interaction.followUp(buildTrackEmbed(first, t(interaction.guild.id, "now_playing_title"), "nowplaying", context, interaction.guild.id));
+          }
         } else {
           const track = result.tracks[0];
           state.queue.push(track);
-          await interaction.editReply(buildTrackEmbed(track, t(interaction.guild.id, "now_playing_title"), "nowplaying", null, interaction.guild.id));
+          if (isPlaying) {
+            await interaction.editReply(
+              buildTrackEmbed(
+                track,
+                t(interaction.guild.id, "queued_track_title"),
+                "queue",
+                t(interaction.guild.id, "queued_track_desc"),
+                interaction.guild.id
+              )
+            );
+          } else {
+            await interaction.editReply(buildTrackEmbed(track, t(interaction.guild.id, "now_playing_title"), "nowplaying", null, interaction.guild.id));
+          }
         }
-        const isPlaying = Boolean(state.now || state.playing || state.player?.track);
         if (!isPlaying) {
           await playNext(interaction.guild.id);
         } else {
