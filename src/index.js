@@ -132,6 +132,8 @@ const MESSAGES = {
     queue_cleared_desc: "All queued tracks removed.",
     disconnected_title: "Disconnected",
     disconnected_desc: "Gracefully leaving...",
+    queue_finished_title: "Queue ended",
+    queue_finished_desc: "That’s everything in the queue.",
     busy_title: "Busy",
     busy_desc: "I'm a bit busy right now. Please try again in a minute.",
     unknown_command: "Unknown command.",
@@ -196,6 +198,8 @@ const MESSAGES = {
     queue_cleared_desc: "已移除所有排队曲目。",
     disconnected_title: "已断开",
     disconnected_desc: "正在退出语音频道...",
+    queue_finished_title: "队列结束",
+    queue_finished_desc: "队列里的歌曲已播放完。",
     busy_title: "繁忙",
     busy_desc: "我现在有点忙，请稍后再试。",
     unknown_command: "未知指令。",
@@ -260,6 +264,8 @@ const MESSAGES = {
     queue_cleared_desc: "已移除所有排隊曲目。",
     disconnected_title: "已斷開",
     disconnected_desc: "正在離開語音頻道...",
+    queue_finished_title: "隊列結束",
+    queue_finished_desc: "隊列中的歌曲已播放完。",
     busy_title: "繁忙",
     busy_desc: "我現在有點忙，請稍後再試。",
     unknown_command: "未知指令。",
@@ -324,6 +330,8 @@ const MESSAGES = {
     queue_cleared_desc: "キュー内の曲をすべて削除しました。",
     disconnected_title: "切断",
     disconnected_desc: "ボイスチャンネルから退出します...",
+    queue_finished_title: "キュー終了",
+    queue_finished_desc: "キューの曲をすべて再生しました。",
     busy_title: "混雑中",
     busy_desc: "ただいま混雑しています。少し待ってから再試行してください。",
     unknown_command: "不明なコマンドです。",
@@ -388,6 +396,8 @@ const MESSAGES = {
     queue_cleared_desc: "큐의 모든 곡을 제거했습니다.",
     disconnected_title: "연결 해제",
     disconnected_desc: "음성 채널에서 나가는 중...",
+    queue_finished_title: "큐 종료",
+    queue_finished_desc: "큐의 모든 곡이 재생되었습니다.",
     busy_title: "혼잡",
     busy_desc: "현재 바쁩니다. 잠시 후 다시 시도해 주세요.",
     unknown_command: "알 수 없는 명령입니다.",
@@ -837,6 +847,8 @@ function getState(guildId) {
       retryCounts: {},
       retrySeen: {},
       idleTimer: null,
+      lastChannelId: null,
+      queueFinishedNotified: false,
       queueMessageId: null,
       queueChannelId: null,
       queueIconUrl: null,
@@ -868,6 +880,26 @@ async function updateQueueMessage(guildId) {
     await message.edit(payload);
   } catch (err) {
     console.error("Failed to update queue message", err);
+  }
+}
+
+async function notifyQueueFinished(state) {
+  if (state.queueFinishedNotified) return;
+  const channelId = state.queueChannelId || state.lastChannelId;
+  if (!channelId) return;
+  try {
+    const channel = await client.channels.fetch(channelId);
+    if (!channel || !channel.isTextBased()) return;
+    await channel.send(
+      buildEmbedMessage({
+        title: t(state.guildId, "queue_finished_title"),
+        description: t(state.guildId, "queue_finished_desc"),
+        icon: "queue"
+      })
+    );
+    state.queueFinishedNotified = true;
+  } catch (err) {
+    console.error("Failed to notify queue finished", err);
   }
 }
 
@@ -1180,6 +1212,7 @@ async function playNext(guildId, force = false) {
   if (!next) {
     state.now = null;
     await updateQueueMessage(guildId);
+    await notifyQueueFinished(state);
     if (state.player && !state.idleTimer) {
       state.idleTimer = setTimeout(async () => {
         try {
@@ -1225,6 +1258,7 @@ async function playNext(guildId, force = false) {
   state.now = chosen;
   state.playing = true;
   state.startedAt = Date.now();
+  state.queueFinishedNotified = false;
   logTrackDebug("start", chosen, { startedAt: state.startedAt });
   if (state.idleTimer) {
     clearTimeout(state.idleTimer);
@@ -1325,6 +1359,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
       case "play": {
         await interaction.deferReply();
         await ensurePlayer(interaction, state);
+        state.lastChannelId = interaction.channelId;
+        state.queueFinishedNotified = false;
 
         const overloadReason = getNodeOverloadReason();
         if (overloadReason) {
@@ -1536,6 +1572,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
         const attachment = message.attachments.find((a) => a.name === ICONS.queue);
         state.queueMessageId = message.id;
         state.queueChannelId = interaction.channelId;
+        state.lastChannelId = interaction.channelId;
         state.queuePage = 1;
         state.queueIconUrl = attachment ? attachment.url : null;
         return;
