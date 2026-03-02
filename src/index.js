@@ -952,12 +952,12 @@ async function ensurePlayer(interaction, state) {
         state.queue.push(state.now);
       }
       state.now = null;
-      void playNext(interaction.guild.id);
+      void playNext(interaction.guild.id, true);
     });
 
     state.player.on("stuck", () => {
       state.playing = false;
-      void playNext(interaction.guild.id);
+      void playNext(interaction.guild.id, true);
     });
 
     state.player.on("error", (err) => {
@@ -1062,10 +1062,10 @@ async function requireSameVoiceChannel(interaction) {
   return true;
 }
 
-async function playNext(guildId) {
+async function playNext(guildId, force = false) {
   const state = queues.get(guildId);
   if (!state || !state.player || state.playing) return;
-  if (state.player?.track) return;
+  if (!force && state.player?.track) return;
 
   const next = state.queue.shift();
   if (!next) {
@@ -1285,7 +1285,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
           }
         }
         if (!isPlaying && !state.player?.track) {
-          await playNext(interaction.guild.id);
+          await playNext(interaction.guild.id, true);
         } else {
           await updateQueueMessage(interaction.guild.id);
         }
@@ -1311,7 +1311,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
               description: t(interaction.guild.id, "skipped_current_desc"),
               icon: "skip"
             }));
-            await playNext(interaction.guild.id);
+            await playNext(interaction.guild.id, true);
             if (state.now) {
               await interaction.followUp(buildTrackEmbed(state.now, t(interaction.guild.id, "now_playing_title"), "nowplaying", null, interaction.guild.id));
             }
@@ -1330,7 +1330,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
             description: t(interaction.guild.id, "skipped_to_desc", { position }),
             icon: "skip"
           }));
-          await playNext(interaction.guild.id);
+          await playNext(interaction.guild.id, true);
           if (state.now) {
             await interaction.followUp(buildTrackEmbed(state.now, t(interaction.guild.id, "now_playing_title"), "nowplaying", null, interaction.guild.id));
           }
@@ -1344,7 +1344,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
           description: t(interaction.guild.id, "skipped_desc"),
           icon: "skip"
         }));
-        await playNext(interaction.guild.id);
+        await playNext(interaction.guild.id, true);
         if (state.now) {
           await interaction.followUp(buildTrackEmbed(state.now, t(interaction.guild.id, "now_playing_title"), "nowplaying", null, interaction.guild.id));
         }
