@@ -577,6 +577,72 @@ function isPreviewSoundCloud(track) {
   return identifier.includes("/preview/") || identifier.includes("/preview");
 }
 
+function tokenizeText(value) {
+  return new Set(
+    String(value || "")
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, " ")
+      .split(/\s+/)
+      .filter(Boolean)
+  );
+}
+
+function tokenSimilarity(a, b) {
+  if (a.size === 0 || b.size === 0) return 0;
+  let overlap = 0;
+  for (const token of a) {
+    if (b.has(token)) overlap += 1;
+  }
+  return overlap / Math.max(a.size, b.size);
+}
+
+function durationSimilarity(expectedMs, actualMs) {
+  if (!expectedMs || !actualMs) return 0.35;
+  const diff = Math.abs(expectedMs - actualMs);
+  const tolerance = Math.max(expectedMs * 0.25, 30000);
+  return Math.max(0, 1 - diff / tolerance);
+}
+
+function scoreSoundCloudMirror(targetTrack, candidateTrack) {
+  if (!targetTrack || !candidateTrack) return -1;
+  const titleScore = tokenSimilarity(
+    tokenizeText(targetTrack?.info?.title),
+    tokenizeText(candidateTrack?.info?.title)
+  );
+  const artistScore = tokenSimilarity(
+    tokenizeText(targetTrack?.info?.author),
+    tokenizeText(candidateTrack?.info?.author)
+  );
+  const lengthScore = durationSimilarity(targetTrack?.info?.length || 0, candidateTrack?.info?.length || 0);
+  const previewPenalty = isPreviewSoundCloud(candidateTrack) ? 0.5 : 0;
+  return titleScore * 0.5 + artistScore * 0.3 + lengthScore * 0.2 - previewPenalty;
+}
+
+function pickBestSoundCloudMirror(targetTrack, tracks, options = {}) {
+  const {
+    minScore = 0.15,
+    allowPreview = false,
+    seenIdentifiers = null
+  } = options;
+  if (!Array.isArray(tracks) || tracks.length === 0) return null;
+
+  let best = null;
+  let bestScore = Number.NEGATIVE_INFINITY;
+  for (const track of tracks) {
+    if (track?.info?.sourceName !== "soundcloud") continue;
+    if (!allowPreview && isPreviewSoundCloud(track)) continue;
+    const id = track?.info?.identifier || track?.info?.uri;
+    if (seenIdentifiers && id && seenIdentifiers.has(id)) continue;
+    const score = scoreSoundCloudMirror(targetTrack, track);
+    if (score > bestScore) {
+      best = track;
+      bestScore = score;
+    }
+  }
+  if (!best || bestScore < minScore) return null;
+  return best;
+}
+
 async function findNonPreviewSoundCloud(track) {
   if (!track || track?.info?.sourceName !== "soundcloud") return null;
   if (!isPreviewSoundCloud(track)) return null;
@@ -589,7 +655,7 @@ async function findNonPreviewSoundCloud(track) {
   try {
     const res = await node.rest.resolve(`scsearch:${query}`);
     const result = normalizeLoadResult(res);
-    const candidate = result.tracks?.find((t) => !isPreviewSoundCloud(t));
+    const candidate = pickBestSoundCloudMirror(track, result.tracks, { allowPreview: false, minScore: 0.1 });
     return candidate || null;
   } catch (err) {
     console.error("Preview fallback search failed", err);
@@ -625,9 +691,14 @@ async function tryEarlyEndFallback(state, guildId, trackArg) {
     const res = await node.rest.resolve(`scsearch:${query}`);
     const result = normalizeLoadResult(res);
     const seen = state.retrySeen[key] || new Set();
-    const next = result.tracks?.find((t) => !isPreviewSoundCloud(t) && !seen.has(t.info?.identifier));
+    const next = pickBestSoundCloudMirror(track, result.tracks, {
+      allowPreview: false,
+      seenIdentifiers: seen,
+      minScore: 0.1
+    });
     if (!next) return false;
-    seen.add(next.info?.identifier);
+    const nextId = next?.info?.identifier || next?.info?.uri;
+    if (nextId) seen.add(nextId);
     state.retrySeen[key] = seen;
     state.queue.unshift(next);
     state.playing = false;
@@ -1133,6 +1204,8 @@ async function ensurePlayer(interaction, state) {
     state.player.on("error", (err) => {
       console.error("Player error", err);
       state.playing = false;
+      state.now = null;
+      void playNext(interaction.guild.id, true);
     });
 
     state.player.on("closed", () => {
@@ -1158,7 +1231,10 @@ async function resolveTracks(query) {
   const node = shoukaku.nodes.get("main");
   if (!node) throw new Error("Lavalink node is not ready yet.");
 
-  const identifier = /^https?:\/\//.test(query) ? query : `scsearch:${query}`;
+  const normalizedQuery = String(query || "").trim().replace(/^<(.+)>$/, "$1").trim();
+  const isUrl = /^https?:\/\//i.test(normalizedQuery);
+  const identifier = isUrl ? normalizedQuery : `scsearch:${normalizedQuery}`;
+
   return node.rest.resolve(identifier);
 }
 
@@ -1274,7 +1350,7 @@ async function playNext(guildId, force = false) {
       try {
         const res = await node.rest.resolve(`scsearch:${query}`);
         const result = normalizeLoadResult(res);
-        const candidate = result.tracks?.find((t) => !isPreviewSoundCloud(t));
+        const candidate = pickBestSoundCloudMirror(next, result.tracks, { allowPreview: false, minScore: 0.1 });
         if (candidate) {
           chosen = candidate;
         }
@@ -1304,7 +1380,15 @@ async function playNext(guildId, force = false) {
   if (state.player.setPaused) {
     await state.player.setPaused(false);
   }
-  await state.player.playTrack({ track: { encoded: chosen.encoded } });
+  try {
+    await state.player.playTrack({ track: { encoded: chosen.encoded } });
+  } catch (err) {
+    console.error("Failed to start track", err);
+    state.playing = false;
+    state.now = null;
+    await playNext(guildId, true);
+    return;
+  }
   await updateQueueMessage(guildId);
 }
 
@@ -1451,7 +1535,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
           result.loadType === "playlist_loaded" ||
           Boolean(result.playlistInfo?.name);
 
-        const isPlaying = Boolean(state.now && state.playing);
+        const hasActivePlayerTrack = Boolean(state.player?.track);
+        const isPlaying = Boolean((state.now && state.playing) || hasActivePlayerTrack);
         clearQueueFinishTimer(state);
 
         if (isCollection && result.tracks.length > 1) {
@@ -1563,7 +1648,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
         return;
       }
       case "pause": {
-        if (!state.player) {
+        if (!state.player || !state.now) {
           await replyWarn(interaction, t(interaction.guild.id, "warn_nothing_playing"));
           return;
         }
@@ -1578,7 +1663,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
         return;
       }
       case "resume": {
-        if (!state.player) {
+        if (!state.player || !state.now) {
           await replyWarn(interaction, t(interaction.guild.id, "warn_nothing_playing"));
           return;
         }
@@ -1649,6 +1734,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
             icon: "queue"
           })
         );
+        await updateQueueMessage(interaction.guild.id);
         return;
       }
       case "leave": {
