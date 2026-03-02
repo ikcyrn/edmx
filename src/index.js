@@ -1175,13 +1175,14 @@ async function ensurePlayer(interaction, state) {
         logTrackDebug("end", state.now, { reason, suppressed: true });
         return;
       }
+      if (reasonUpper === "REPLACED") {
+        // A replacement is expected when starting a new track; do not mutate current state here.
+        logTrackDebug("end", state.now, { reason, ignored: true });
+        return;
+      }
       state.playing = false;
       const endedTrack = state.now;
       state.now = null;
-      if (reasonUpper === "REPLACED") {
-        logTrackDebug("end", endedTrack, { reason });
-        return;
-      }
       const endedAt = Date.now();
       const playedMs = state.startedAt ? endedAt - state.startedAt : null;
       logTrackDebug("end", endedTrack, { reason, playedMs });
@@ -1335,7 +1336,7 @@ async function playNext(guildId, force = false) {
   }
   if (!force && state.playing && state.now) return;
 
-  const next = state.queue.shift();
+  const next = state.queue[0];
   if (!next) {
     state.now = null;
     state.playing = false;
@@ -1404,9 +1405,9 @@ async function playNext(guildId, force = false) {
     console.error("Failed to start track", err);
     state.playing = false;
     state.now = null;
-    await playNext(guildId, true);
     return;
   }
+  state.queue.shift();
   await updateQueueMessage(guildId);
 }
 

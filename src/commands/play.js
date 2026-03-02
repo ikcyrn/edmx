@@ -136,6 +136,16 @@ module.exports = async function handlePlay(ctx) {
     state.playing = false;
     state.now = null;
     await playNext(interaction.guild.id, true);
+    if (!state.now && state.queue.length > 0 && state.player) {
+      try {
+        await state.player.destroy();
+      } catch (err) {
+        console.error("Failed to reset player after unsuccessful playback start", err);
+      }
+      state.player = null;
+      await ensurePlayer(interaction, state);
+      await playNext(interaction.guild.id, true);
+    }
   } else {
     await updateQueueMessage(interaction.guild.id);
   }
