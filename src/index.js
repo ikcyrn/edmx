@@ -1090,15 +1090,6 @@ function isPlayerConnected(player) {
   return true;
 }
 
-async function waitForPlayerConnection(player, timeoutMs = 5000) {
-  const start = Date.now();
-  while (Date.now() - start < timeoutMs) {
-    if (isPlayerConnected(player)) return true;
-    await new Promise((r) => setTimeout(r, 100));
-  }
-  return isPlayerConnected(player);
-}
-
 function buildTrackEmbed(track, title, icon, context, guildId) {
   const info = track.info || {};
   const embed = new EmbedBuilder()
@@ -1303,8 +1294,6 @@ async function ensurePlayer(interaction, state) {
     state.idleTimer = null;
   }
 
-  await waitForPlayerConnection(state.player);
-
   return { voiceChannel };
 }
 
@@ -1502,18 +1491,6 @@ async function playNext(guildId, force = false, options = {}) {
   if (state.player.setPaused) {
     await state.player.setPaused(false);
   }
-  const ready = await waitForPlayerConnection(state.player);
-  console.log("[player:pre-play]", JSON.stringify({
-    guildId,
-    ready,
-    queueLength: state.queue.length,
-    connection: {
-      channelId: state.player?.connection?.channelId,
-      connected: state.player?.connection?.connected,
-      ready: state.player?.connection?.ready,
-      state: state.player?.connection?.state
-    }
-  }));
   try {
     await state.player.playTrack({ track: { encoded: chosen.encoded } });
   } catch (err) {
