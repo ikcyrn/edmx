@@ -1350,6 +1350,13 @@ async function replyWarn(interaction, message) {
 
 async function stopCurrentForTransition(state, errorPrefix) {
   if (!state?.player) return false;
+  console.log("[player:stop-request]", JSON.stringify({
+    guildId: state.guildId,
+    reason: errorPrefix || "transition",
+    now: state.now ? trackKey(state.now) : null,
+    queueLength: state.queue.length,
+    playing: state.playing
+  }));
   state.suppressStopEvents += 1;
   try {
     await state.player.stopTrack();
@@ -1565,6 +1572,19 @@ client.on(Events.InteractionCreate, async (interaction) => {
   }
 
   const state = getState(interaction.guild.id);
+  console.log("[command]", JSON.stringify({
+    guildId: interaction.guild.id,
+    command: interaction.commandName,
+    userId: interaction.user.id,
+    channelId: interaction.channelId,
+    state: {
+      playing: state.playing,
+      hasNow: Boolean(state.now),
+      queueLength: state.queue.length,
+      hasPlayer: Boolean(state.player),
+      hasPlayerTrack: Boolean(state.player?.track)
+    }
+  }));
 
   try {
     await commandEntry.run({

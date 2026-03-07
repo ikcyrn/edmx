@@ -1,6 +1,10 @@
 module.exports = async function handleLeave(ctx) {
   const { interaction, state, t, shoukaku, buildEmbedMessage, updateQueueMessage, updateNowPlayingMessage } = ctx;
   if (state.player) {
+    console.log("[player:destroy-request]", JSON.stringify({
+      guildId: interaction.guild.id,
+      reason: "leave-command"
+    }));
     await state.player.destroy();
     state.player = null;
     state.queue = [];

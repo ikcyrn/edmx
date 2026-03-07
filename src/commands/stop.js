@@ -20,6 +20,10 @@ module.exports = async function handleStop(ctx) {
 
   if (hasPlayer) {
     try {
+      console.log("[player:destroy-request]", JSON.stringify({
+        guildId: interaction.guild.id,
+        reason: "stop-command"
+      }));
       await state.player.destroy();
     } catch (err) {
       console.error("Failed to destroy player during stop command", err);

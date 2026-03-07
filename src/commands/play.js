@@ -125,6 +125,10 @@ module.exports = async function handlePlay(ctx) {
       const stopped = await stopCurrentForTransition(state, "Failed to stop stale track before starting new playback");
       if (!stopped && state.player) {
         try {
+          console.log("[player:destroy-request]", JSON.stringify({
+            guildId: interaction.guild.id,
+            reason: "play-stale-recovery"
+          }));
           await state.player.destroy();
         } catch (err) {
           console.error("Failed to destroy stale player before restarting playback", err);
@@ -139,6 +143,10 @@ module.exports = async function handlePlay(ctx) {
     await playNext(interaction.guild.id, true, { announce: false });
     if (!state.now && state.queue.length > 0 && state.player) {
       try {
+        console.log("[player:destroy-request]", JSON.stringify({
+          guildId: interaction.guild.id,
+          reason: "play-start-retry"
+        }));
         await state.player.destroy();
       } catch (err) {
         console.error("Failed to reset player after unsuccessful playback start", err);
