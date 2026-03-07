@@ -1251,6 +1251,10 @@ async function ensurePlayer(interaction, state) {
       const endedAt = Date.now();
       const playedMs = state.startedAt ? endedAt - state.startedAt : null;
       logTrackDebug("end", endedTrack, { reason, playedMs });
+      if (reasonUpper === "CLEANUP") {
+        void updateNowPlayingMessage(interaction.guild.id);
+        return;
+      }
       void (async () => {
         const recovered = await tryEarlyEndFallback(state, interaction.guild.id, endedTrack);
         if (recovered) return;
