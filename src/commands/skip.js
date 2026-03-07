@@ -15,6 +15,11 @@ module.exports = async function handleSkip(ctx) {
       return;
     }
     if (position === 0) {
+      if (state.playStartTimer) {
+        clearTimeout(state.playStartTimer);
+        state.playStartTimer = null;
+      }
+      state.pendingStart = null;
       state.playing = false;
       state.now = null;
       state.nowDisplay = null;
@@ -34,6 +39,11 @@ module.exports = async function handleSkip(ctx) {
       return;
     }
     state.queue.splice(0, position - 1);
+    if (state.playStartTimer) {
+      clearTimeout(state.playStartTimer);
+      state.playStartTimer = null;
+    }
+    state.pendingStart = null;
     state.playing = false;
     state.now = null;
     state.nowDisplay = null;
@@ -48,6 +58,11 @@ module.exports = async function handleSkip(ctx) {
     await playNext(interaction.guild.id, true);
     return;
   }
+  if (state.playStartTimer) {
+    clearTimeout(state.playStartTimer);
+    state.playStartTimer = null;
+  }
+  state.pendingStart = null;
   state.playing = false;
   state.now = null;
   state.nowDisplay = null;

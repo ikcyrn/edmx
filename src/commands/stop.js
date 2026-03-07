@@ -34,9 +34,15 @@ module.exports = async function handleStop(ctx) {
     clearTimeout(state.idleTimer);
     state.idleTimer = null;
   }
+  if (state.playStartTimer) {
+    clearTimeout(state.playStartTimer);
+    state.playStartTimer = null;
+  }
   clearQueueFinishTimer(state);
   state.retryCounts = {};
   state.retrySeen = {};
+  state.pendingStart = null;
+  state.playStartRetryCounts = {};
   state.suppressStopEvents = 0;
   state.queueFinishedNotified = false;
   state.queue = [];
