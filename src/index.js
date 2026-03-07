@@ -683,9 +683,10 @@ async function findNonPreviewSoundCloud(track) {
 
 async function tryEarlyEndFallback(state, guildId, trackArg) {
   const track = trackArg || state.now;
-  const sourceName = track?.info?.sourceName;
+  const targetTrack = track?._fallbackSeed || track;
+  const sourceName = targetTrack?.info?.sourceName || track?.info?.sourceName;
   if (!track || (sourceName !== "spotify" && sourceName !== "soundcloud")) return false;
-  const expected = track?.info?.length || 0;
+  const expected = targetTrack?.info?.length || track?.info?.length || 0;
   if (!expected || expected < EARLY_END_MIN_MS) return false;
   if (!state.startedAt) return false;
   const playedMs = Date.now() - state.startedAt;
@@ -697,8 +698,8 @@ async function tryEarlyEndFallback(state, guildId, trackArg) {
   if (retries >= 2) return false;
   state.retryCounts[key] = retries + 1;
 
-  const title = track?.info?.title || "";
-  const author = track?.info?.author || "";
+  const title = targetTrack?.info?.title || track?.info?.title || "";
+  const author = targetTrack?.info?.author || track?.info?.author || "";
   const query = `${title} ${author}`.trim();
   if (!query) return false;
 
@@ -708,7 +709,8 @@ async function tryEarlyEndFallback(state, guildId, trackArg) {
   try {
     const res = await node.rest.resolve(`scsearch:${query}`);
     const result = normalizeLoadResult(res);
-    const seen = state.retrySeen[key] || new Set();
+    const currentId = track?.info?.identifier || track?.info?.uri;
+    const seen = state.retrySeen[key] || new Set(currentId ? [currentId] : []);
     const next = pickBestSoundCloudMirror(track, result.tracks, {
       allowPreview: false,
       seenIdentifiers: seen,
@@ -718,6 +720,9 @@ async function tryEarlyEndFallback(state, guildId, trackArg) {
     const nextId = next?.info?.identifier || next?.info?.uri;
     if (nextId) seen.add(nextId);
     state.retrySeen[key] = seen;
+    if (targetTrack && targetTrack !== next) {
+      next._fallbackSeed = targetTrack;
+    }
     state.queue.unshift(next);
     state.playing = false;
     state.now = null;
@@ -1445,6 +1450,7 @@ async function playNext(guildId, force = false, options = {}) {
         const result = normalizeLoadResult(res);
         const candidate = pickBestSoundCloudMirror(next, result.tracks, { allowPreview: false, minScore: 0.1 });
         if (candidate) {
+          candidate._fallbackSeed = next;
           chosen = candidate;
           displayTrack = {
             ...candidate,
