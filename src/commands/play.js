@@ -83,10 +83,8 @@ module.exports = async function handlePlay(ctx) {
     );
     if (hasStalePlaybackState) {
       try {
-        state.expectedPlayerClose = true;
         await state.player.destroy();
       } catch (err) {
-        state.expectedPlayerClose = false;
         console.error("Failed to destroy stale player before restarting playback", err);
       }
       state.player = null;
@@ -148,11 +146,9 @@ module.exports = async function handlePlay(ctx) {
     if (!state.now && state.queue.length > 0) {
       try {
         if (state.player) {
-          state.expectedPlayerClose = true;
           await state.player.destroy();
         }
       } catch (err) {
-        state.expectedPlayerClose = false;
         console.error("Failed to reset player after unsuccessful playback start", err);
       }
       state.player = null;

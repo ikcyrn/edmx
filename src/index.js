@@ -947,7 +947,6 @@ function getState(guildId) {
       nowPlayingMessageId: null,
       nowPlayingChannelId: null,
       nowDisplay: null,
-      expectedPlayerClose: false,
       suppressStopEvents: 0
     });
   }
@@ -966,7 +965,6 @@ function resetState(state) {
   state.nowPlayingMessageId = null;
   state.nowPlayingChannelId = null;
   state.nowDisplay = null;
-  state.expectedPlayerClose = false;
   state.suppressStopEvents = 0;
   clearQueueFinishTimer(state);
 }
@@ -1159,10 +1157,8 @@ async function ensurePlayer(interaction, state) {
     if (!isPlayerConnected(state.player)) {
       if (!state.player?.track) {
         try {
-          state.expectedPlayerClose = true;
           await state.player.destroy();
         } catch (err) {
-          state.expectedPlayerClose = false;
           console.error("Error destroying disconnected player", err);
         }
         state.player = null;
@@ -1175,10 +1171,8 @@ async function ensurePlayer(interaction, state) {
       }
       if (!currentChannelId && !state.playing && !state.now) {
         try {
-          state.expectedPlayerClose = true;
           await state.player.destroy();
         } catch (err) {
-          state.expectedPlayerClose = false;
           console.error("Error destroying stale player", err);
         }
         state.player = null;
@@ -1280,11 +1274,6 @@ async function ensurePlayer(interaction, state) {
     });
 
     state.player.on("closed", () => {
-      if (state.expectedPlayerClose) {
-        state.expectedPlayerClose = false;
-        state.player = null;
-        return;
-      }
       resetState(state);
     });
   }
