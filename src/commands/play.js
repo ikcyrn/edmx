@@ -74,13 +74,12 @@ module.exports = async function handlePlay(ctx) {
     result.loadType === "playlist_loaded" ||
     Boolean(result.playlistInfo?.name);
 
-  const isPlaying = Boolean(state.playing && (state.now || state.pendingStart) && state.player);
+  const isPlaying = Boolean(state.now && state.playing && state.player?.track);
   clearQueueFinishTimer(state);
 
   if (!isPlaying) {
     const hasStalePlaybackState = Boolean(
-      state.player &&
-      (state.player.track || state.playing || state.now || state.pendingStart || state.suppressStopEvents > 0)
+      state.player && (state.player.track || state.playing || state.now || state.suppressStopEvents > 0)
     );
     if (hasStalePlaybackState) {
       try {

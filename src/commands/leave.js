@@ -5,12 +5,6 @@ module.exports = async function handleLeave(ctx) {
     await state.player.destroy();
     state.player = null;
     state.queue = [];
-    state.pendingStart = null;
-    state.playStartRetryCounts = {};
-    if (state.playStartTimer) {
-      clearTimeout(state.playStartTimer);
-      state.playStartTimer = null;
-    }
     state.now = null;
     state.nowDisplay = null;
     state.playing = false;

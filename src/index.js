@@ -947,9 +947,6 @@ function getState(guildId) {
       nowPlayingMessageId: null,
       nowPlayingChannelId: null,
       nowDisplay: null,
-      pendingStart: null,
-      playStartTimer: null,
-      playStartRetryCounts: {},
       expectedPlayerClose: false,
       suppressStopEvents: 0
     });
@@ -958,10 +955,6 @@ function getState(guildId) {
 }
 
 function resetState(state) {
-  if (state.playStartTimer) {
-    clearTimeout(state.playStartTimer);
-    state.playStartTimer = null;
-  }
   if (state.idleTimer) {
     clearTimeout(state.idleTimer);
     state.idleTimer = null;
@@ -973,8 +966,6 @@ function resetState(state) {
   state.nowPlayingMessageId = null;
   state.nowPlayingChannelId = null;
   state.nowDisplay = null;
-  state.pendingStart = null;
-  state.playStartRetryCounts = {};
   state.expectedPlayerClose = false;
   state.suppressStopEvents = 0;
   clearQueueFinishTimer(state);
@@ -1263,11 +1254,6 @@ async function ensurePlayer(interaction, state) {
         logTrackDebug("end", state.now, { reason, ignored: true });
         return;
       }
-      if (state.playStartTimer) {
-        clearTimeout(state.playStartTimer);
-        state.playStartTimer = null;
-      }
-      state.pendingStart = null;
       state.playing = false;
       const endedTrack = state.now;
       state.now = null;
@@ -1287,38 +1273,7 @@ async function ensurePlayer(interaction, state) {
       })();
     });
 
-    state.player.on("start", () => {
-      if (!state.pendingStart) return;
-      if (state.playStartTimer) {
-        clearTimeout(state.playStartTimer);
-        state.playStartTimer = null;
-      }
-      const pending = state.pendingStart;
-      state.pendingStart = null;
-      state.now = pending.chosen;
-      state.nowDisplay = pending.displayTrack;
-      if (state.queue.length > 0 && trackKey(state.queue[0]) === trackKey(pending.queuedTrack)) {
-        state.queue.shift();
-      } else {
-        const idx = state.queue.findIndex((item) => trackKey(item) === trackKey(pending.queuedTrack));
-        if (idx >= 0) state.queue.splice(idx, 1);
-      }
-      state.playStartRetryCounts[trackKey(pending.queuedTrack)] = 0;
-      void (async () => {
-        if (pending.announce) {
-          await announceNowPlayingStart(state);
-        }
-        await updateQueueMessage(interaction.guild.id);
-        await updateNowPlayingMessage(interaction.guild.id);
-      })();
-    });
-
     state.player.on("stuck", () => {
-      if (state.playStartTimer) {
-        clearTimeout(state.playStartTimer);
-        state.playStartTimer = null;
-      }
-      state.pendingStart = null;
       state.playing = false;
       state.now = null;
       state.nowDisplay = null;
@@ -1327,11 +1282,6 @@ async function ensurePlayer(interaction, state) {
 
     state.player.on("error", (err) => {
       console.error("Player error", err);
-      if (state.playStartTimer) {
-        clearTimeout(state.playStartTimer);
-        state.playStartTimer = null;
-      }
-      state.pendingStart = null;
       state.playing = false;
       state.now = null;
       state.nowDisplay = null;
@@ -1470,15 +1420,10 @@ async function playNext(guildId, force = false, options = {}) {
   if (force && state.playing && !state.now) {
     state.playing = false;
   }
-  if (!force && state.playing && (state.now || state.pendingStart)) return;
+  if (!force && state.playing && state.now) return;
 
   const next = state.queue[0];
   if (!next) {
-    if (state.playStartTimer) {
-      clearTimeout(state.playStartTimer);
-      state.playStartTimer = null;
-    }
-    state.pendingStart = null;
     state.now = null;
     state.nowDisplay = null;
     state.playing = false;
@@ -1541,9 +1486,8 @@ async function playNext(guildId, force = false, options = {}) {
       chosen = replacement;
     }
   }
-  state.pendingStart = { chosen, displayTrack, announce, queuedTrack: next };
-  state.now = null;
-  state.nowDisplay = null;
+  state.now = chosen;
+  state.nowDisplay = displayTrack;
   state.playing = true;
   state.startedAt = Date.now();
   state.queueFinishedNotified = false;
@@ -1574,33 +1518,17 @@ async function playNext(guildId, force = false, options = {}) {
     await state.player.playTrack({ track: { encoded: chosen.encoded } });
   } catch (err) {
     console.error("Failed to start track", err);
-    state.pendingStart = null;
     state.playing = false;
     state.now = null;
     state.nowDisplay = null;
     return;
   }
-  if (state.playStartTimer) {
-    clearTimeout(state.playStartTimer);
+  state.queue.shift();
+  if (announce) {
+    await announceNowPlayingStart(state);
   }
-  const retryKey = trackKey(next);
-  state.playStartTimer = setTimeout(async () => {
-    state.playStartTimer = null;
-    if (!state.pendingStart || state.now) return;
-    const retries = state.playStartRetryCounts[retryKey] || 0;
-    console.error("Track start timeout", { guildId, retryKey, retries });
-    state.pendingStart = null;
-    state.playing = false;
-    state.now = null;
-    state.nowDisplay = null;
-    if (retries >= 1) {
-      await updateQueueMessage(guildId);
-      await updateNowPlayingMessage(guildId);
-      return;
-    }
-    state.playStartRetryCounts[retryKey] = retries + 1;
-    await playNext(guildId, true, options);
-  }, 8000);
+  await updateQueueMessage(guildId);
+  await updateNowPlayingMessage(guildId);
 }
 
 client.once(Events.ClientReady, async () => {
