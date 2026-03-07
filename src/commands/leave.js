@@ -1,6 +1,7 @@
 module.exports = async function handleLeave(ctx) {
   const { interaction, state, t, shoukaku, buildEmbedMessage, updateQueueMessage, updateNowPlayingMessage } = ctx;
   if (state.player) {
+    state.expectedPlayerClose = true;
     await state.player.destroy();
     state.player = null;
     state.queue = [];

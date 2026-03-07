@@ -20,8 +20,10 @@ module.exports = async function handleStop(ctx) {
 
   if (hasPlayer) {
     try {
+      state.expectedPlayerClose = true;
       await state.player.destroy();
     } catch (err) {
+      state.expectedPlayerClose = false;
       console.error("Failed to destroy player during stop command", err);
     } finally {
       state.player = null;
