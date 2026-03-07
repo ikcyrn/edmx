@@ -77,6 +77,25 @@ module.exports = async function handlePlay(ctx) {
   const isPlaying = Boolean(state.now && state.playing && state.player?.track);
   clearQueueFinishTimer(state);
 
+  if (!isPlaying) {
+    const hasStalePlaybackState = Boolean(
+      state.player && (state.player.track || state.playing || state.now || state.suppressStopEvents > 0)
+    );
+    if (hasStalePlaybackState) {
+      try {
+        await state.player.destroy();
+      } catch (err) {
+        console.error("Failed to destroy stale player before restarting playback", err);
+      }
+      state.player = null;
+      state.suppressStopEvents = 0;
+      state.playing = false;
+      state.now = null;
+      state.nowDisplay = null;
+      await ensurePlayer(interaction, state);
+    }
+  }
+
   if (isCollection && result.tracks.length > 1) {
     state.queue.push(...result.tracks);
     await interaction.editReply(
@@ -120,19 +139,6 @@ module.exports = async function handlePlay(ctx) {
   }
 
   if (!isPlaying) {
-    const hasStalePlaybackState = Boolean(
-      state.player && (state.player.track || state.playing || state.now || state.suppressStopEvents > 0)
-    );
-    if (hasStalePlaybackState) {
-      try {
-        await state.player.destroy();
-      } catch (err) {
-        console.error("Failed to destroy stale player before restarting playback", err);
-      }
-      state.player = null;
-      state.suppressStopEvents = 0;
-      await ensurePlayer(interaction, state);
-    }
     state.playing = false;
     state.now = null;
     state.nowDisplay = null;
