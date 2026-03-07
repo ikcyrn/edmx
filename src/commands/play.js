@@ -10,7 +10,6 @@ module.exports = async function handlePlay(ctx) {
     normalizeLoadResult,
     clearQueueFinishTimer,
     buildTrackEmbed,
-    stopCurrentForTransition,
     playNext,
     updateQueueMessage
   } = ctx;
@@ -121,25 +120,28 @@ module.exports = async function handlePlay(ctx) {
   }
 
   if (!isPlaying) {
-    if (state.player?.track) {
-      const stopped = await stopCurrentForTransition(state, "Failed to stop stale track before starting new playback");
-      if (!stopped && state.player) {
-        try {
-          await state.player.destroy();
-        } catch (err) {
-          console.error("Failed to destroy stale player before restarting playback", err);
-        }
-        state.player = null;
-        await ensurePlayer(interaction, state);
+    const hasStalePlaybackState = Boolean(
+      state.player && (state.player.track || state.playing || state.now || state.suppressStopEvents > 0)
+    );
+    if (hasStalePlaybackState) {
+      try {
+        await state.player.destroy();
+      } catch (err) {
+        console.error("Failed to destroy stale player before restarting playback", err);
       }
+      state.player = null;
+      state.suppressStopEvents = 0;
+      await ensurePlayer(interaction, state);
     }
     state.playing = false;
     state.now = null;
     state.nowDisplay = null;
     await playNext(interaction.guild.id, true, { announce: false });
-    if (!state.now && state.queue.length > 0 && state.player) {
+    if (!state.now && state.queue.length > 0) {
       try {
-        await state.player.destroy();
+        if (state.player) {
+          await state.player.destroy();
+        }
       } catch (err) {
         console.error("Failed to reset player after unsuccessful playback start", err);
       }
